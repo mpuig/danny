@@ -81,11 +81,19 @@ A reverse proxy alone does not establish model quality or safe automation policy
 
 ## Verification
 
-Worker tests cover ownership, queue saturation, cancellation, expiry, request
+Worker tests cover ownership, connection/queue saturation, cancellation, expiry, request
 copying, recovery, read deadlines, and error status codes. Engine tests cover
 admission before raw scoring, aggregate correction budgets, bounded/disabled caches,
 and cooperative deadlines. The actual trained 135M adapter passes the official
 TypeScript SDK smoke test through this worker architecture; this checks response
 contracts, not the correctness of its judgments.
+
+Fresh real-model benchmark runs verified clean SIGTERM exits, and a lifecycle test
+verifies inherited SIGINT handling. Selected Qwen also passed the SDK test with its
+fitted temperature; 24 development predictions matched archived probabilities exactly.
+
+Final verification: all **67 Python tests** passed with model, training, and
+candidate opt-ins enabled; Ruff, compile checks, all 20 CLI help commands, and
+Markdown link/fence/shell checks also passed.
 
 See [Experiments](EXPERIMENTS.md) for measured performance and model limitations.

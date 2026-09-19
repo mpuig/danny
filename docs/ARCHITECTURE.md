@@ -62,7 +62,9 @@ Independent scoring is now the default, preventing sibling questions from changi
 the compute shape of a decision. Shared prefix caching requires
 `--execution-mode shared`; `--precision float32` substantially reduces measured
 drift. Native shared execution is experimental. Both paths project only the last
-hidden position on supported backbones. See [Experiments](EXPERIMENTS.md) for
+hidden position on the verified Llama/Qwen3/SmolLM3 families. Unverified families
+retain their full framework wrapper and independent execution, preserving any
+wrapper-specific logit transforms instead of bypassing them by attribute matching. See [Experiments](EXPERIMENTS.md) for
 SmolLM/Qwen measurements; historical timing and projection results are not a parity
 guarantee for the updated path.
 
@@ -116,6 +118,7 @@ structural oracle and explicit native drift measurements.
 Limitations:
 
 - Prefix KV is physically copied within the bounded microbatch; no paged cache.
+  Common prefixes are currently recomputed per microbatch, not reused across all chunks.
 - Distinct complete prompts are tokenized separately; repeated prompts use a bounded
   token LRU, not a reusable state-embedding cache.
 - Legacy Choice/Noul and Score templates have different text before state and

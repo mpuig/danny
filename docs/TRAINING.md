@@ -251,5 +251,6 @@ uv run python scripts/fit_calibration.py \
 ```
 
 Temperature artifacts reject mismatched weights/tokenizers, rendering/readout,
-precision, execution policy, or contextual correction. In particular, a native
+precision, execution policy, microbatch size, or contextual correction. Earlier
+artifacts from the fixed-size evaluator imply four views. In particular, a native
 independent artifact cannot be silently reused with FP32 shared inference.

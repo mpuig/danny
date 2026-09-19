@@ -2,6 +2,7 @@ import http.client
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -224,6 +225,34 @@ class BoundedHTTPTests(unittest.TestCase):
             self.release.set()
             self.assertEqual(first.result()[0], 200)
             self.assertTrue(all(future.result()[0] == 200 for future in pending))
+
+    def test_connection_limit_rejects_before_starting_another_handler(self):
+        accepted = threading.Event()
+        base = make_handler(self.worker, io_timeout=2)
+
+        class Handler(base):
+            def setup(self):
+                super().setup()
+                accepted.set()
+
+        server = BoundedHTTPServer(("127.0.0.1", 0), Handler, max_connections=1)
+        thread = threading.Thread(
+            target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        )
+        thread.start()
+        first = socket.create_connection(server.server_address, timeout=2)
+        try:
+            self.assertTrue(accepted.wait(1))
+            # The first connection holds its handler while awaiting headers.
+            # Capacity rejection requires no second handler or parsed request.
+            with socket.create_connection(server.server_address, timeout=2) as second:
+                self.assertTrue(second.recv(4096).startswith(b"HTTP/1.1 503"))
+            self.assertEqual(self.worker.stats()["accepted"], 0)
+        finally:
+            first.close()
+            server.shutdown()
+            server.server_close()
+            thread.join(1)
 
     def test_total_read_deadline_cannot_be_reset_by_trickling_bytes(self):
         clock = iter([0.0, 0.04, 0.08, 0.12])

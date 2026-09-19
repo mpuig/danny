@@ -226,6 +226,82 @@ not proof of universal calibration benefit or strong teacher imitation. All 400
 teacher test distributions are **unversioned**. A live, pinned teacher comparison
 still needs an approved provider/version/budget.
 
+## 8. Bounded HTTP serving measurements
+
+Apple **M4 Max, 36 GiB unified memory**, without concurrent model training. Full
+sweep code: `2fcffe0`; lifecycle/configuration follow-up: `64313c7`. These runs use
+the trained adapters (unmerged LoRA), not the bare backbones from section 1.
+Each backbone/policy ran 16 cases: 3/12 mixed questions, 1/16 repeated state
+messages, 3/26 Choice options, and concurrency 1/4, with 20 warm requests per case.
+Requests open new connections. No fitted temperature or contextual correction was
+used in the main sweep. The synthetic fixtures are not a quality benchmark.
+
+Twelve questions, longer state, **three options**, concurrency one:
+
+| Adapter / execution | HTTP p50 | HTTP p95 | Successful requests/s | Cumulative peak MLX active memory, full sweep |
+|---|---:|---:|---:|---:|
+| SmolLM native independent | 258 ms | 261 ms | 3.87 | .75 GB |
+| SmolLM FP32 shared | 121 ms | 123 ms | 8.27 | 1.35 GB |
+| Qwen native independent | 723 ms | 749 ms | 1.38 | 2.11 GB |
+| Qwen FP32 shared | 425 ms | 454 ms | 2.33 | 4.54 GB |
+
+These are small-sample quantiles on one working machine, not production p95
+certification. Peak allocation includes startup and preceding cases; it is not the
+incremental cost of this row. Reported process peak RSS was .44–.45 GB for SmolLM
+and about 1.55 GB for Qwen. RSS and MLX counters measure different/overlapping
+resources, not complete system memory; do not add them. GB here means 10^9 bytes.
+
+Increasing Choice width to 26 largely removed the shared-mode latency advantage:
+SmolLM p50 was 305 ms native / 300 ms FP32 shared; Qwen 1,166 / 1,139 ms. We have
+not isolated padding, precision, and LoRA overhead as causes. Shared mode currently
+recomputes a common prefix per microbatch and physically copies its KV. It is not
+constant-cost parallelism or paged attention.
+
+Concurrency four introduced queue delay rather than automatic cross-request
+batching: in the three-option Qwen fixture, p50 rose to 3,222 ms native / 1,725 ms
+FP32 shared. A dedicated saturation test, queue capacity one and eight clients,
+returned **2 successful responses and 46 HTTP 503s** across 48 submissions, with
+no inference failure. A fresh post-fix rerun reproduced those admission counts.
+Oversized-body, question-count, and token-budget probes returned 413, 422, and 422.
+
+For a separate SmolLM contextual-correction case (12 questions, longer state),
+the first request took 580 ms versus warm p50 262 ms; input scoring tokens dropped
+from 10,184 to 6,074 after caching priors. New case-specific rubrics forced cold
+prior misses. Python cache sizes remained within their configured entry ceilings.
+The MLX free-buffer threshold is reclaimed on the next allocation, not an exact
+instantaneous cache-memory ceiling.
+
+HTTP single-versus-multi drift for the first Choice in each case was **zero** in
+native independent mode; maxima were **3.94e-6 SmolLM / 6.17e-6 Qwen** in FP32 shared
+mode, below the predeclared 2e-5 gate. This compares each policy to itself, not native
+to FP32. Calibration artifacts must match precision/execution/microbatch settings;
+the native temperature files cannot be used to claim calibrated FP32 performance.
+
+The first benchmark driver exposed an operational defect: a background shell passed
+ignored SIGINT to the server, so cleanup waited 60 seconds and then killed it. That
+delay was outside measured HTTP samples. Explicit SIGINT/SIGTERM handlers now fix
+it; benchmark success also requires a clean exit. Fresh runs across both models and
+policies, plus saturation, passed with **no forced shutdown**. A real-model lifecycle
+test reproduces inherited SIGINT masking to guard against regression.
+
+The official TypeScript SDK smoke test also passed against selected Qwen with its
+fitted temperature. Across 24 development questions (eight per primitive), current
+HTTP probabilities matched the frozen calibrated evaluation **exactly**. These are
+contract/numerical checks, not additional independent model-quality evidence.
+
+Reports: `data/runs/serving-v1/` and `data/runs/serving-validation-v1/`. Reproduce:
+
+```bash
+uv run python scripts/benchmark_service.py --model Qwen/Qwen3-0.6B \
+  --adapter adapters/qwen3-0.6b-structured-v1-lr1e-5 \
+  --out-dir data/runs/qwen-http-new
+# Repeat into another fresh directory with --precision float32 --execution-mode shared.
+# Use --calibrate for cold/warm prior measurements; --queue-capacity 1 --concurrency 8
+# for an explicit saturation run. See --help for all axes and sample counts.
+```
+
+See [Serving](SERVING.md) for deadlines, operating limits, and security caveats.
+
 ## Remaining evidence gates
 
 - Independently review and expand rubric labels; establish a new frozen workflow
