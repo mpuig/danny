@@ -23,6 +23,7 @@ from tqdm import tqdm
 from jev.data import load_examples, sha256_file
 from jev.engine import SystemOneEngine
 from jev.metrics import expected_calibration_error
+from jev.provenance import environment_identity, model_identity
 from jev.rendering import RENDERER_VERSIONS, render, resolve_renderer
 from jev.serialization import dumps
 
@@ -80,6 +81,7 @@ def main():
     engine = SystemOneEngine(args.model, adapter_path=args.adapter,
                              contextual_calibration=args.calibrate, renderer_version=version,
                              precision=args.precision, execution_mode=args.execution_mode)
+    provenance = {"environment": environment_identity(), "backbone": model_identity(args.model)}
     out.mkdir(parents=True, exist_ok=False)
     rows = []
     # Exclusive creation and a final report distinguish complete runs from partial
@@ -113,6 +115,7 @@ def main():
         "arguments": vars(args), "renderer_version": engine.renderer_version,
         "data_sha256": data_hash,
         "adapter_sha256": adapter_hash,
+        **provenance,
         "overall_micro": summarize_rows(rows),
         "by_source": {key: summarize_rows(group) for key, group in sorted(by_source.items())},
         "by_primitive": {key: summarize_rows(group) for key, group in sorted(by_primitive.items())},

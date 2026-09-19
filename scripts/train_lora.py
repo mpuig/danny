@@ -29,6 +29,7 @@ from mlx_lm.tuner.utils import linear_to_lora_layers
 
 from jev.data import assert_training_disjoint, load_training_rows, sha256_file
 from jev.rendering import RENDERER_VERSIONS, label_token_ids
+from jev.provenance import environment_identity, model_identity
 
 LORA_PARAMS = {
     "rank": 16,
@@ -142,6 +143,7 @@ def main() -> None:
 
     mx.random.seed(args.seed)
     model, tokenizer = load(args.model)
+    provenance = {"environment": environment_identity(), "backbone": model_identity(args.model)}
     pad_id = tokenizer.eos_token_id or 0
 
     model.freeze()
@@ -159,7 +161,8 @@ def main() -> None:
     step_fn = nn.value_and_grad(model, loss_fn)
     rng = random.Random(args.seed)
 
-    print(f"initial val loss: {evaluate(model, val_rows, args.batch_size, pad_id):.4f}")
+    initial_val_loss = evaluate(model, val_rows, args.batch_size, pad_id)
+    print(f"initial val loss: {initial_val_loss:.4f}")
 
     step, ema, t0, examples_seen = 0, None, time.time(), 0
     for epoch in range(args.epochs):
@@ -179,7 +182,11 @@ def main() -> None:
         if args.max_steps and step >= args.max_steps:
             break
 
-    print(f"final val loss: {evaluate(model, val_rows, args.batch_size, pad_id):.4f}")
+    training_seconds = time.time() - t0
+    final_val_loss = evaluate(model, val_rows, args.batch_size, pad_id)
+    if not math.isfinite(final_val_loss):
+        raise ValueError("nonfinite final validation loss; refusing to save unusable adapter")
+    print(f"final val loss: {final_val_loss:.4f}")
 
     out.mkdir(parents=True, exist_ok=False)
     mx.save_safetensors(
@@ -203,6 +210,9 @@ def main() -> None:
         "train_rows": len(train_rows), "val_rows": len(val_rows),
         "train_skipped": train_skipped, "val_skipped": val_skipped,
         "steps": step, "examples_seen": examples_seen,
+        "initial_val_loss": initial_val_loss, "final_val_loss": final_val_loss,
+        "training_seconds": training_seconds, "peak_active_bytes": mx.get_peak_memory(),
+        **provenance,
     }, indent=2) + "\n")
     print(f"saved adapters -> {out}")
 
