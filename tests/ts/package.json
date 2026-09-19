@@ -1,0 +1,11 @@
+{
+  "name": "jev-sdk-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test.ts"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0"
+  }
+}
