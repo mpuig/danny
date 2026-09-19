@@ -1,13 +1,21 @@
-# Example benchmark: local Qwen vs cached Jev
+# Example benchmark: local Qwen vs Jev
 
-Measured **2026-09-19**, using the existing Qwen HTTP server on port **8399**.
+Measured **2026-09-19**, using Qwen HTTP predictions from the existing server on
+port **8399**, then refreshing Jev on the same 24 frozen examples.
 
-**Result on 24 examples:** Qwen matched the recorded dataset labels on **19/24
-(79.2%)**; cached Jev matched **21/24 (87.5%)**. Their most likely answers agreed
-on **16/24 (66.7%)**. Neither model's answer was treated as ground truth.
+**Fresh result:** Qwen matched the recorded dataset labels on **19/24 (79.2%)**;
+**Jev 1.13.0 matched 21/24 (87.5%)**. Their most likely answers agreed on
+**16/24 (66.7%)**. Neither model's answer was treated as ground truth.
 
-**This is not a live comparison with today's Jev.** The reference consists of
-previously collected, unversioned Jev responses. No external API calls were made.
+The initial comparison used an unversioned cache. The live follow-up made exactly
+**24 external API requests**, with no retries. The first requested `jev-latest`,
+which reported `jev-1.13.0`; the remaining 23 explicitly requested that version.
+Every response reported `jev-1.13.0`. Original Qwen predictions were reused.
+
+**No Jev argmax decisions changed** between cached and fresh responses. The largest
+probability change was **0.03**. Cached results remain alongside the live results
+below; their original teacher version is still unknown.
+
 These few examples illustrate behavior; they do not establish model equivalence,
 calibration, or a reliable ranking for production workloads.
 
@@ -22,7 +30,8 @@ calibration, or a reliable ranking for production workloads.
 | Precision / execution | Native / independent; configured microbatch size 4 |
 | Fitted temperature | None, verified in model discovery |
 | Contextual correction | Off in the supplied server launch command |
-| Jev reference | Existing cache originally requested `jev-latest`; resolved version unknown |
+| Fresh Jev reference | `jev-1.13.0`, reported on all 24 live responses |
+| Historical reference | Existing cache originally requested `jev-latest`; resolved version unknown |
 | Sources | AG News, DBpedia, IMDB, Yelp ratings |
 | Questions | 8 Choice, 8 Noul, 8 Score; one question per HTTP request |
 
@@ -48,32 +57,37 @@ These are familiar task families, not unseen workflow rubrics.
 Accuracy means the highest-probability label matches the original dataset label.
 For Score, this tests the **modal level**, not the rounded weighted-mean score.
 
-| Primitive | Cases | Qwen correct | Cached Jev correct | Same most likely answer |
+| Primitive | Cases | Qwen correct | Fresh Jev correct | Same most likely answer |
 |---|---:|---:|---:|---:|
 | Choice | 8 | 7/8 | 6/8 | 5/8 |
 | Noul | 8 | 7/8 | 8/8 | 7/8 |
 | Score | 8 | 5/8 | 7/8 | 4/8 |
 | **Total** | **24** | **19/24** | **21/24** | **16/24** |
 
+The cached and fresh Jev responses have identical argmax labels, so the original
+accuracy and agreement counts are unchanged.
+
 ### Probability quality and agreement
 
-| Metric | Qwen | Cached Jev |
-|---|---:|---:|
-| Multiclass Brier error, lower is better | 0.288 | 0.243 |
-| Negative log-likelihood (NLL), lower is better | 0.463 | 1.404* |
-| Score mean absolute error, 0–4 level scale | 0.4869 | 0.2775 |
+| Metric | Qwen | Fresh Jev 1.13.0 | Cached Jev |
+|---|---:|---:|---:|
+| Multiclass Brier error, lower is better | 0.2879 | 0.2422 | 0.2432 |
+| Negative log-likelihood (NLL), lower is better | 0.4631 | 1.4038* | 1.4041* |
+| Score mean absolute error, 0–4 level scale | 0.4869 | 0.2775 | 0.2775 |
 
 \* **Do not interpret the NLL column as proof that Qwen is better calibrated.**
-The cached Jev distribution assigns zero probability to the recorded label in B03.
-With the declared `1e-12` probability floor, that one case contributes about **1.151**
-to its aggregate NLL. Cached probabilities are rounded; their internal precision
-is unavailable. Dataset labels can also disagree with a reasonable rubric interpretation.
+Both cached and fresh Jev distributions assign zero probability to the recorded
+label in B03. With the declared `1e-12` floor, that one case contributes about
+**1.151** to aggregate NLL. Returned Jev probabilities have two-decimal precision
+in these responses; underlying unrounded probabilities are unavailable. Dataset
+labels can also disagree with a reasonable rubric interpretation.
 
-Agreement metrics compare distributions, not correctness:
+Qwen-versus-fresh-Jev agreement metrics compare distributions, not correctness:
 
-- Mean Jensen–Shannon divergence: **0.128 nats**; zero means identical distributions.
-- Mean total variation distance: **0.300** on a 0–1 scale.
-- Noul mean absolute difference in `P(yes)`: **0.081**.
+- Mean Jensen–Shannon divergence: **0.129 nats**; zero means identical distributions
+  (cached comparison: 0.128).
+- Mean total variation distance: **0.302** on a 0–1 scale (cached: 0.300).
+- Noul mean absolute difference in `P(yes)`: **0.083** (cached: 0.081).
 
 No ECE or statistical-significance claim is made from this small, source-balanced
 but not label-balanced sample. The metrics do not use the API's derived `confidence`.
@@ -92,12 +106,12 @@ teacher-visible state. Display probabilities are rounded to three decimals.
 Question: **“What subject area does the article in the state belong to?”**
 Recorded label: `science_tech`.
 
-| Option | Cached Jev | Qwen |
-|---|---:|---:|
-| world | 0.790 | 0.024 |
-| sports | 0.000 | 0.000 |
-| business | 0.010 | 0.059 |
-| science_tech | 0.200 | 0.917 |
+| Option | Cached Jev | Fresh Jev | Qwen |
+|---|---:|---:|---:|
+| world | 0.790 | 0.800 | 0.024 |
+| sports | 0.000 | 0.000 | 0.000 |
+| business | 0.010 | 0.010 | 0.059 |
+| science_tech | 0.200 | 0.190 | 0.917 |
 
 Qwen matches the dataset category; Jev selects world news. Government seizure of
 servers plausibly crosses category boundaries, so this is not an independently
@@ -110,15 +124,15 @@ adjudicated Jev error.
 Question: **“What is the main topic of the news article in the state?”**
 Recorded label: `business`.
 
-| Option | Cached Jev | Qwen |
-|---|---:|---:|
-| world | 0.000 | 0.031 |
-| sports | 0.000 | 0.002 |
-| business | 1.000 | 0.956 |
-| science_tech | 0.000 | 0.011 |
+| Option | Cached Jev | Fresh Jev | Qwen |
+|---|---:|---:|---:|
+| world | 0.000 | 0.000 | 0.031 |
+| sports | 0.000 | 0.000 | 0.002 |
+| business | 1.000 | 1.000 | 0.956 |
+| science_tech | 0.000 | 0.000 | 0.011 |
 
-Both select business. Jev's cached `1.000` does not establish perfect certainty;
-it is the stored, rounded value.
+Both select business. Jev's returned `1.000` does not establish perfect certainty;
+this is the API-visible value, not an unrounded internal probability.
 
 ### B09 — Noul: praise mixed with a movie-plot description
 
@@ -127,10 +141,10 @@ it is the stored, rounded value.
 Question: **“Is the reviewer's overall opinion of the movie favorable?”**
 Recorded label: **yes**. The full input also contains the film's plot description.
 
-| Value | Cached Jev | Qwen |
-|---|---:|---:|
-| P(yes) | 0.670 | 0.307 |
-| Decision at a 0.5 threshold | yes | no |
+| Value | Cached Jev | Fresh Jev | Qwen |
+|---|---:|---:|---:|
+| P(yes) | 0.670 | 0.690 | 0.307 |
+| Decision at a 0.5 threshold | yes | yes | no |
 
 Qwen disagrees with both the recorded label and Jev. The example shows a local
 sentiment failure, not its cause; no controlled wording ablation was performed.
@@ -144,10 +158,10 @@ Question: **“Is the reviewer's overall opinion of the movie favorable?”**
 Recorded label: **yes**. The original question says “movie” even though this review
 concerns television; that wording was preserved for both models.
 
-| Value | Cached Jev | Qwen |
-|---|---:|---:|
-| P(yes) | 0.960 | 0.996 |
-| Decision at a 0.5 threshold | yes | yes |
+| Value | Cached Jev | Fresh Jev | Qwen |
+|---|---:|---:|---:|
+| P(yes) | 0.960 | 0.960 | 0.996 |
+| Decision at a 0.5 threshold | yes | yes | yes |
 
 Both agree. Qwen's more extreme probability is not evidence of better calibration.
 
@@ -168,14 +182,14 @@ The exact rubric is:
 3. Good; mostly positive with minor complaints.
 4. Excellent; enthusiastic praise with no real complaints.
 
-| Level | Cached Jev | Qwen |
-|---|---:|---:|
-| 0 — Terrible | 0.090 | 0.045 |
-| 1 — Poor | 0.890 | 0.663 |
-| 2 — Mixed | 0.020 | 0.276 |
-| 3 — Good | 0.000 | 0.013 |
-| 4 — Excellent | 0.000 | 0.002 |
-| **Weighted-mean score** | **0.930** | **1.264** |
+| Level | Cached Jev | Fresh Jev | Qwen |
+|---|---:|---:|---:|
+| 0 — Terrible | 0.090 | 0.100 | 0.045 |
+| 1 — Poor | 0.890 | 0.890 | 0.663 |
+| 2 — Mixed | 0.020 | 0.010 | 0.276 |
+| 3 — Good | 0.000 | 0.000 | 0.013 |
+| 4 — Excellent | 0.000 | 0.000 | 0.002 |
+| **Weighted-mean score** | **0.930** | **0.910** | **1.264** |
 
 Both select level 1 as most likely, but Qwen assigns more weight to “Mixed.”
 
@@ -187,14 +201,14 @@ Both select level 1 as most likely, but Qwen assigns more weight to “Mixed.”
 Question: **“Rate the overall sentiment of the review in the state.”**
 Recorded level: **3**. The same five-level rubric applies.
 
-| Level | Cached Jev | Qwen |
-|---|---:|---:|
-| 0 — Terrible | 0.000 | 0.012 |
-| 1 — Poor | 0.000 | 0.056 |
-| 2 — Mixed | 0.000 | 0.503 |
-| 3 — Good | 0.530 | 0.392 |
-| 4 — Excellent | 0.470 | 0.036 |
-| **Weighted-mean score** | **3.470** | **2.385** |
+| Level | Cached Jev | Fresh Jev | Qwen |
+|---|---:|---:|---:|
+| 0 — Terrible | 0.000 | 0.000 | 0.012 |
+| 1 — Poor | 0.000 | 0.000 | 0.056 |
+| 2 — Mixed | 0.000 | 0.000 | 0.503 |
+| 3 — Good | 0.530 | 0.560 | 0.392 |
+| 4 — Excellent | 0.470 | 0.440 | 0.036 |
+| **Weighted-mean score** | **3.470** | **3.440** | **2.385** |
 
 Jev's modal level matches the recorded rating. Qwen places its largest probability
 on “Mixed” and produces a lower mean. This is one reason the Score aggregate is
@@ -206,7 +220,7 @@ Labels below are argmax labels, not `confidence` values or weighted-mean scores.
 Full distributions, inputs, original teacher answers, and raw local responses are
 preserved in the local artifacts.
 
-| Case | Primitive | Recorded label | Cached Jev | Qwen |
+| Case | Primitive | Recorded label | Jev (cached and fresh) | Qwen |
 |---|---|---|---|---|
 | B01 | Choice | science_tech | world | science_tech |
 | B02 | Choice | business | business | business |
@@ -245,9 +259,18 @@ not a guarantee across versions or devices.
 - One question per request, serial requests, already-loaded server on the development
   Mac. No explicit warmup; the repeated requests could reuse token-cache entries.
 - These are heterogeneous examples and small samples, not production p95 figures.
-- **Jev latency and cost were not measured**, because its answers came from a cache.
 
-## Reproduce
+The live follow-up completed all 24 Jev calls without retries or errors:
+
+- Median external HTTP latency: **804 ms**, range **720–995 ms**.
+- These are serial HTTPS requests with new connections, including WAN/TLS overhead.
+  They were not measured simultaneously with Qwen; this is not a model-compute
+  speed comparison or a production latency guarantee.
+- Reported usage: **12,915 input tokens / 996 output tokens**. Local and Jev usage
+  counters have different meanings; nonzero Jev output accounting does not establish
+  autoregressive answer generation. Actual billed cost was not retrieved.
+
+## Reproduce the local/cached comparison
 
 Keep the supplied server running:
 
@@ -301,9 +324,44 @@ and rejection of remote URLs/redirects:
 uv run python -m unittest discover -s tests/python -p test_cached_benchmark.py -v
 ```
 
+## Reproduce the live Jev refresh
+
+This command makes **paid external API requests** using `TYPESAFE_API_KEY` from the
+environment or local `.env`. Run only when you intend to spend that budget:
+
+```fish
+uv run python scripts/refresh_benchmark_jev.py \
+  --source-run data/runs/benchmark-examples-v2 \
+  --teacher jev-1.13.0 --max-requests 24 --confirm-live \
+  --out-dir data/runs/benchmark-live-jev-new
+```
+
+It reuses the frozen Qwen predictions and verifies the saved case hash and
+request/label alignment before calling Jev. There are no automatic retries or
+resumes. It stops on an error or model-version mismatch; inspect partial artifacts
+before authorizing another run. `--teacher jev-latest` instead resolves the first
+response, then pins that reported version for the remaining requests.
+
+Fresh artifacts are in `data/runs/benchmark-live-jev-v1/`:
+
+- `manifest.json`: source hashes, collection policy, and local model identity.
+- `requests.jsonl`: exact submitted state/question/model and timestamps; no credentials.
+- `responses.jsonl`: unmodified full responses, model IDs, usage, and elapsed times.
+- `predictions.jsonl`: aligned Qwen, cached Jev, and fresh Jev distributions.
+- `report.json`: metrics, version consistency, token totals, and timings.
+
+Five additional tests cover explicit live consent, request budgets, frozen input
+hashes, reported-version pinning, rounding, and no retries or persisted credentials.
+Run both benchmark test files without any external API calls:
+
+```fish
+uv run python -m unittest discover -s tests/python -p '*benchmark.py' -v
+```
+
 ## What this does not establish
 
-- Agreement with the **current** Jev service or a pinned Jev version.
+- General equivalence with Jev, or behavior of versions other than the observed
+  `jev-1.13.0` responses on these 24 cases.
 - Generalization to unfamiliar support workflows, including the refund example.
 - Safe automation thresholds, reliable calibration, or a statistically established ranking.
 - Absence of pretraining/fuzzy overlap. Original source IDs are unknown.
@@ -312,6 +370,7 @@ uv run python -m unittest discover -s tests/python -p test_cached_benchmark.py -
 - Jev-equivalent Score internals. This Qwen adapter scores levels jointly; Jev's
   public documentation describes independent level evaluation.
 
-A live follow-up requires a selected Jev version, an approved request/cost budget,
-and fresh preserved responses. See [Experiments](docs/EXPERIMENTS.md) for the larger
-controlled local evaluations and [Serving](docs/SERVING.md) for server options.
+The live refresh resolves the missing teacher-version evidence for these cases;
+it does not remove the sampling, label, or task-family limitations. See
+[Experiments](docs/EXPERIMENTS.md) for the larger controlled local evaluations and
+[Serving](docs/SERVING.md) for server options.

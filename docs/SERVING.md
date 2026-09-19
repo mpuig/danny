@@ -145,9 +145,9 @@ Do not add `--with-jev` for local testing; that option makes live external API c
 [`scripts/demo_request.py`](../scripts/demo_request.py) contains another payload,
 but running it loads a model directly rather than calling these HTTP servers.
 
-[Example benchmark](../BENCHMARK.md) compares 24 requests to the local Qwen server
-with cached, unversioned Jev answers. It includes per-case results and an offline
-reference runner; it makes no live Jev calls.
+[Example benchmark](../BENCHMARK.md) compares 24 local Qwen requests with cached
+answers and fresh Jev 1.13.0 responses. Its cached-reference runner makes no external
+calls; a separate live-refresh command requires `--confirm-live` and incurs API usage.
 
 ## Other model and serving options
 
@@ -348,6 +348,7 @@ fitted temperature; 24 development predictions matched archived probabilities ex
 The implementation closeout (`0f207b3`) passed all **67 Python tests** with model,
 training, and candidate opt-ins enabled; Ruff, compile checks, the then-existing
 20 CLI help commands, and Markdown link/fence/shell checks also passed. The later
-cached-teacher benchmark adds five unit tests and its own HTTP comparison results.
+cached-teacher benchmark and live refresh each add five unit tests, plus recorded
+HTTP comparison results. These small diagnostics do not certify model parity.
 
 See [Experiments](EXPERIMENTS.md) for measured performance and model limitations.
