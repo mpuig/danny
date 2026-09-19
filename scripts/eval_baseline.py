@@ -15,6 +15,7 @@ from tqdm import tqdm
 from jev.engine import SystemOneEngine
 from jev.metrics import summarize, summarize_binary
 from jev.recast import TASKS, records
+from jev.rendering import RENDERER_VERSIONS
 
 
 def main() -> None:
@@ -24,10 +25,12 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--calibrate", action="store_true", help="contextual calibration")
     ap.add_argument("--adapter", default=None, help="path to a LoRA adapter directory")
+    ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
     args = ap.parse_args()
 
     engine = SystemOneEngine(
-        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter
+        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter,
+        renderer_version=args.renderer,
     )
     task = TASKS[args.task]
     recs = list(records(task, n=args.n))
@@ -56,6 +59,7 @@ def main() -> None:
             {
                 "model": args.model,
                 "adapter": args.adapter,
+                "renderer_version": engine.renderer_version,
                 "task": args.task,
                 "calibrated": args.calibrate,
                 **report,

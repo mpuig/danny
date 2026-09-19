@@ -45,13 +45,15 @@ those groups rather than treating all 1,048 converted questions as independent.
 ## Commands that exist today
 
 The recast evaluator defaults to **n=100**, canonical phrasing, seed 42, and
-contextual correction **off**. Historical tables below use the stated n and flag.
-Run matched raw and corrected evaluations rather than enabling correction silently.
+contextual correction **off**. Bare models now default to `structured-v1`; adapters
+select their recorded renderer, with v0 assumed for historical metadata. Reports
+include `renderer_version`. Use `--renderer legacy-v0` for the historical baselines
+below, and compare the same renderer as well as the same correction setting.
 
 ```bash
-# Raw baseline on a built-in recast task.
+# Raw historical-format baseline on a built-in recast task.
 uv run python scripts/eval_baseline.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --task sst2 --n 200
+    --task sst2 --n 200 --renderer legacy-v0
 
 # Trained variant; requires an existing matching adapter.
 uv run python scripts/eval_baseline.py --model mlx-community/SmolLM3-3B-Base-bf16 \
@@ -76,10 +78,28 @@ Teacher caches are named only by task and n. An existing incomplete cache is
 accepted without checking count, rubric, dataset revision, or teacher version.
 Audit the cache before comparing runs; pin and record versions in the next harness.
 
-There is **no external-JSONL evaluation command yet**. `eval_baseline.py` accepts
-only the six registered recast tasks. Passing converted Kev data as the trainer's
-`--val` gives a loss, not the full evaluation battery, and using the test file there
-would contaminate model selection.
+### Canonical external-data evaluation
+
+```bash
+uv run python scripts/eval_dataset.py --model HuggingFaceTB/SmolLM2-135M \
+    --data data/kev-v1/development.jsonl --out-dir data/evals/v1-smoke --n 20
+```
+
+`eval_dataset.py` accepts canonical gold-labeled JSONL. It saves per-example answers,
+probabilities, target keys, record/group IDs, and metrics in `predictions.jsonl`,
+plus arguments, data/adapter hashes, renderer, and aggregate/source/primitive metrics
+in `report.json`. Existing output directories are refused. A partial predictions
+file without a final report indicates an interrupted run.
+
+By default it evaluates all examples; `--n` selects a seeded **example** subsample,
+not a group sample. Current reports are point estimates without bootstrap intervals.
+They use one question per inference call and are not serving-throughput benchmarks.
+Soft teacher targets are rejected here; use a separate fidelity evaluation.
+`eval_baseline.py` still handles only the six registered recast tasks.
+
+Do not use the reserved test partition as the trainer's `--val`: that is model
+selection even if the trainer only prints loss. Tune on development and reserve
+calibration for future fitted correction.
 
 ### SDK smoke test
 
@@ -92,9 +112,31 @@ cd tests/ts && npm install && node test.ts
 node test.ts --with-jev
 ```
 
-This checks one basic request with three primitives. It does not certify all SDKs,
-invalid inputs, structured criteria, confidence formulas, context limits, question
-independence, or numerical parity. See [Architecture](ARCHITECTURE.md).
+This checks one basic request with three primitives and does not certify complete
+SDK compatibility. The new Python suite covers additional contract behavior.
+
+### Python regression and model smoke tests
+
+```bash
+uv run python -m unittest discover -s tests/python -v
+
+# Requires a cached/downloadable non-quantized 135M model. With HF_HUB_OFFLINE=1,
+# a missing cache fails rather than downloading. Training uses temporary fixtures.
+HF_HUB_OFFLINE=1 JEV_TEST_MODEL=HuggingFaceTB/SmolLM2-135M JEV_TEST_TRAINING=1 \
+    uv run python -m unittest discover -s tests/python -v
+```
+
+The initial suite covers JSON boundaries, primitive identity, golden v0/v1 prompts,
+renderer/adapter compatibility, label tokens, target validation, known-wrapper
+normalization, transitive grouped splits, manifest hashes, invalid downloads,
+HTTP 422/structured requests, cache retry safety, and two-step LoRA save/reload/eval.
+Model tests are opt-in; core data/rendering tests need no model download.
+
+**Native-precision caveat:** on the tested SmolLM2-135M request, BF16 single versus
+cached/batched predictions differed by about 0.03. FP32 cache-math tests pass at
+`2e-5` probability tolerance; native batch-order tests use `2e-3`. This is not a
+claim that native single/batch parity passes. Measure that drift before depending
+on tight decision thresholds. See [Architecture](ARCHITECTURE.md).
 
 ## Historical results — retained, not rerun in this review
 
@@ -166,10 +208,13 @@ sensitivity is a robustness goal, not a promise of behavioral replication.
   binning, and model. It is context, not this project's acceptance threshold.
 - Current teacher-target integrity and gold agreement are in [Data](DATA.md).
 
-## Required next evaluation work (not implemented)
+## Remaining evaluation work
 
-1. **Data/provenance:** frozen group-disjoint train/dev/calibration/test manifests;
-   external JSONL support; per-example predictions and complete run configuration.
+The canonical Kev preparer and external evaluator now provide grouped partitions,
+manifests, and per-example predictions. Remaining gaps include:
+
+1. **Data/provenance:** migrate other sources, verify cross-source overlap, and
+   pin backbone/tokenizer/software revisions in addition to current data hashes.
 2. **Probability quality:** paired bootstrap intervals, reliability plots,
    classwise/primitive-level analysis, and raw/corrected/temperature-scaled variants.
 3. **Rubric transfer:** same state under different questions and changed criteria;
@@ -179,9 +224,9 @@ sensitivity is a robustness goal, not a promise of behavioral replication.
 5. **Workflow usefulness:** error cost, risk–coverage, threshold-local reliability,
    and final actions. Weighted composite scores are not automatically calibrated
    event probabilities, and marginal probabilities need not be independent.
-6. **Engine correctness:** single versus batched results, mixed primitives, padding,
-   question addition/removal/reordering, ID renaming, finite distributions, tokenizer
-   labels, cache fallback, and adapter reload parity. Use declared tolerances.
+6. **Engine correctness:** extend the current regression suite across backbones,
+   adapters, lengths, correction modes, and native precision. Resolve or bound
+   single/batch numerical drift; FP32 fixture parity is not a deployment guarantee.
 7. **Serving:** target-hardware latency percentiles, throughput, and peak memory
    across state length, question count, option count, concurrency, and cold/warm
    correction caches. Compare serial and concurrent baselines fairly.

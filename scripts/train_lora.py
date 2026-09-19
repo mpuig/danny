@@ -1,9 +1,9 @@
 """LoRA fine-tuning with the readout-matched loss.
 
 The loss is cross-entropy between the target distribution and the softmax over
-the *label tokens only* at the prompt's last position — exactly what the engine
-reads at inference. Cross-entropy is a proper scoring rule, so with honest
-(eventually soft) targets this trains toward calibrated probabilities.
+the *label tokens only* at the prompt's last position, matching the raw inference
+readout rather than contextual correction. Cross-entropy is a proper scoring rule;
+finite-data and out-of-domain calibration still require measurement.
 mlx_lm's built-in text-completion loss doesn't fit; this loop replaces it.
 
     uv run python scripts/build_data.py --per-task 2000 --val-per-task 200
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import time
 from pathlib import Path
@@ -25,6 +26,9 @@ import mlx.optimizers as optim
 from mlx.utils import tree_flatten
 from mlx_lm import load
 from mlx_lm.tuner.utils import linear_to_lora_layers
+
+from jev.data import assert_training_disjoint, load_training_rows, sha256_file
+from jev.rendering import RENDERER_VERSIONS, label_token_ids
 
 LORA_PARAMS = {
     "rank": 16,
@@ -39,24 +43,22 @@ LORA_PARAMS = {
 }
 
 
-def load_rows(path: str, tokenizer, max_seq: int) -> list[dict]:
-    rows = []
-    skipped = 0
-    with open(path) as f:
-        for line in f:
-            row = json.loads(line)
-            tokens = tokenizer.encode(row["prompt"])
-            if len(tokens) > max_seq:
-                skipped += 1
-                continue
-            row["tokens"] = tokens
-            row["label_ids"] = [
-                tokenizer.encode(l, add_special_tokens=False)[0] for l in row["labels"]
-            ]
-            rows.append(row)
-    if skipped:
-        print(f"{path}: skipped {skipped} rows over {max_seq} tokens")
-    return rows
+def tokenize_rows(source_rows: list[dict], tokenizer, max_seq: int) -> tuple[list[dict], int]:
+    rows, skipped = [], 0
+    for source in source_rows:
+        row = dict(source)
+        row["label_ids"] = label_token_ids(tokenizer, row["labels"])
+        tokens = tokenizer.encode(row["prompt"])
+        if not tokens:
+            raise ValueError(f"empty tokenized prompt: {row['id']}")
+        if len(tokens) > max_seq:
+            skipped += 1
+            continue
+        row["tokens"] = tokens
+        rows.append(row)
+    if not rows:
+        raise ValueError("no examples remain after max-seq filtering")
+    return rows, skipped
 
 
 def make_batches(rows: list[dict], batch_size: int, pad_id: int, rng: random.Random):
@@ -116,8 +118,29 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--max-seq", type=int, default=768)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None,
+                    help="inferred from canonical (v1) or legacy (v0) data if omitted")
     args = ap.parse_args()
+    if args.batch_size < 1 or args.epochs < 1 or args.max_seq < 1 or args.max_steps < 0 or not math.isfinite(args.lr) or args.lr <= 0:
+        ap.error("batch-size, epochs, max-seq, and lr must be positive; max-steps must be nonnegative")
+    out = Path(args.out)
+    if out.exists():
+        ap.error(f"adapter output already exists: {out}; choose a new directory")
 
+    # Validate supervision and splits before allocating a model or training it.
+    input_hashes = {"train": sha256_file(args.train), "val": sha256_file(args.val)}
+    source_train = load_training_rows(args.train, args.renderer)
+    source_val = load_training_rows(args.val, args.renderer)
+    if input_hashes != {"train": sha256_file(args.train), "val": sha256_file(args.val)}:
+        ap.error("input data changed while loading")
+    versions = {r["renderer_version"] for r in source_train + source_val}
+    if len(versions) != 1:
+        ap.error("training and validation must use the same renderer")
+    renderer_version = versions.pop()
+    assert_training_disjoint(source_train, source_val)
+    print(f"renderer: {renderer_version}")
+
+    mx.random.seed(args.seed)
     model, tokenizer = load(args.model)
     pad_id = tokenizer.eos_token_id or 0
 
@@ -127,9 +150,10 @@ def main() -> None:
     n_trainable = sum(v.size for _, v in tree_flatten(model.trainable_parameters()))
     print(f"LoRA on {num_layers} layers, {n_trainable / 1e6:.2f}M trainable params")
 
-    train_rows = load_rows(args.train, tokenizer, args.max_seq)
-    val_rows = load_rows(args.val, tokenizer, args.max_seq)
-    print(f"{len(train_rows)} train rows, {len(val_rows)} val rows")
+    train_rows, train_skipped = tokenize_rows(source_train, tokenizer, args.max_seq)
+    val_rows, val_skipped = tokenize_rows(source_val, tokenizer, args.max_seq)
+    print(f"{len(train_rows)} train rows, {len(val_rows)} val rows; "
+          f"skipped {train_skipped}/{val_skipped} over {args.max_seq} tokens")
 
     optimizer = optim.Adam(learning_rate=args.lr)
     step_fn = nn.value_and_grad(model, loss_fn)
@@ -137,13 +161,14 @@ def main() -> None:
 
     print(f"initial val loss: {evaluate(model, val_rows, args.batch_size, pad_id):.4f}")
 
-    step, ema, t0 = 0, None, time.time()
+    step, ema, t0, examples_seen = 0, None, time.time(), 0
     for epoch in range(args.epochs):
         for batch in make_batches(train_rows, args.batch_size, pad_id, rng):
             loss, grads = step_fn(model, *batch)
             optimizer.update(model, grads)
             mx.eval(model.parameters(), optimizer.state)
             step += 1
+            examples_seen += batch[0].shape[0]
             val = loss.item()
             ema = val if ema is None else 0.95 * ema + 0.05 * val
             if step % 25 == 0:
@@ -156,8 +181,7 @@ def main() -> None:
 
     print(f"final val loss: {evaluate(model, val_rows, args.batch_size, pad_id):.4f}")
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=False)
     mx.save_safetensors(
         str(out / "adapters.safetensors"),
         dict(tree_flatten(model.trainable_parameters())),
@@ -169,9 +193,17 @@ def main() -> None:
                 "num_layers": num_layers,
                 "lora_parameters": LORA_PARAMS,
                 "model": args.model,
+                "renderer_version": renderer_version,
             }
         )
     )
+    (out / "training_manifest.json").write_text(json.dumps({
+        "arguments": vars(args), "renderer_version": renderer_version,
+        "train_sha256": input_hashes["train"], "val_sha256": input_hashes["val"],
+        "train_rows": len(train_rows), "val_rows": len(val_rows),
+        "train_skipped": train_skipped, "val_skipped": val_skipped,
+        "steps": step, "examples_seen": examples_seen,
+    }, indent=2) + "\n")
     print(f"saved adapters -> {out}")
 
 

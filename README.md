@@ -20,8 +20,11 @@ soft-target collection, evaluation scripts, and a development HTTP server.
 - The API supports the basic Jev request/answer shapes and has a TypeScript SDK
   smoke test. **Full behavioral and API compatibility is not established.**
 - Calibration and unfamiliar-rubric generalization are research goals, not guarantees.
-- Primitive-specific modeling and a bounded, tested MLX service are planned.
-  Portable export and a Rust runtime are later, evidence-gated options.
+- `structured-v1` rendering preserves JSON and primitive identity. Historical
+  adapters automatically use `legacy-v0`; incompatible overrides are rejected.
+- Canonical Kev data preparation, split checks, external evaluation, and Python
+  tests are implemented. Specialized heads and a bounded MLX service remain planned.
+- Portable export and a Rust runtime are later, evidence-gated options.
 
 See [Architecture](docs/ARCHITECTURE.md) for current behavior and compatibility gaps,
 and [Roadmap](docs/ROADMAP.md) for the model and serving plan.
@@ -37,9 +40,9 @@ uv sync
 # One request with all three primitives; no adapter required.
 uv run python scripts/demo_request.py --model HuggingFaceTB/SmolLM2-135M
 
-# Untuned baseline. --calibrate enables optional contextual bias correction.
+# Historical v0 baseline. New bare-model calls otherwise default to structured-v1.
 uv run python scripts/eval_baseline.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --task sst2 --n 200 --calibrate
+    --task sst2 --n 200 --calibrate --renderer legacy-v0
 
 # Development server; keep running and use a second terminal for the SDK test.
 uv run python scripts/serve.py --model HuggingFaceTB/SmolLM2-135M --port 8399
@@ -54,6 +57,25 @@ Add `--adapter adapters/smollm3-3b` to the 3B evaluation/server commands only af
 training or obtaining that matching adapter. Weights and datasets are not bundled
 in git. See [Training](docs/TRAINING.md).
 
+## Start a structured-v1 experiment
+
+```bash
+# Validates hashes and derives group-disjoint train/development/calibration/test.
+# Choose a fresh output directory; existing datasets are never overwritten.
+uv run python scripts/prepare_data.py --out-dir data/kev-v1
+
+# A new external-data evaluator saves per-example predictions and a run report.
+uv run python scripts/eval_dataset.py --model HuggingFaceTB/SmolLM2-135M \
+    --data data/kev-v1/development.jsonl --out-dir data/evals/v1-smoke --n 20
+
+# Fast tests; GPU/model tests are opt-in (see Evaluation).
+uv run python -m unittest discover -s tests/python -v
+```
+
+The audited local preparation produced 8,769 training, 1,128 development, 1,103
+calibration, and 1,048 test questions. Do not mix these with the old corpora without
+cross-source leakage checks. See [Training](docs/TRAINING.md) for the v1 LoRA command.
+
 ## Evidence so far
 
 Historical 3B experiments report SST-2 accuracy of **0.925** with gold-label LoRA
@@ -65,7 +87,8 @@ intervals. See [Evaluation](docs/EVALUATION.md) for all results and limitations.
 
 The local data audit found valid Kev train/test downloads, validation overlap
 across training sources, and two Nimble files containing only `404: Not Found`.
-Do not combine the datasets before resolving the issues in [Data](docs/DATA.md).
+The new preparer uses only the verified Kev files; it does not mix in those invalid
+or overlapping legacy artifacts. See [Data](docs/DATA.md).
 
 ## Documentation
 

@@ -74,10 +74,21 @@ checkpoints should be compared rather than excluding the latter categorically.
 
 ## Current evidence and status
 
-Implemented: the MLX readout engine, LoRA training, recast data building, Kev
-conversion, Jev target collection, recast evaluation, permutation testing,
-teacher-agreement evaluation, and a development server with a TypeScript SDK smoke
-test. This is not a comprehensive correctness or compatibility suite.
+Implemented: the MLX readout engine, LoRA training, recast data building, legacy
+Kev conversion, Jev target collection, recast/permutation/teacher evaluation, and
+a development server. The first implementation milestone adds:
+
+- Canonical Kev import with source/group metadata, verified hashes, and disjoint
+  training/development/calibration/test partitions.
+- Versioned rendering: structured-v1 preserves JSON and primitive identity; legacy-v0
+  remains available for historical adapters. Training/inference formats are checked.
+- Training target/label/leakage validation, MLX seeding, and run manifests.
+- Canonical external evaluation with saved per-example predictions.
+- Python data/schema/HTTP/cache tests plus opt-in local model and LoRA smoke tests.
+
+This is not complete Jev compatibility or proof of useful v1 model quality. Score
+still uses a joint-level readout, confidence remains entropy-derived, and native
+BF16 single/batch probability drift was observed. See [Architecture](ARCHITECTURE.md).
 
 Gold-label and distilled 3B adapter files exist locally. Historical evaluation
 results now include both; distillation is no longer merely "in flight".
@@ -88,9 +99,11 @@ the canonical question and criteria are identical. Tweet emotion provides a
 held-out question relative to the four-task recast mix, but not broad evidence
 of arbitrary-rubric generalization. There is no held-out Score family in that mix.
 
-The new external data expands coverage to entailment, reading comprehension, and
-question classification. It is not ready for blind concatenation: see
-[Data](DATA.md) for invalid Nimble downloads, overlap, and missing split artifacts.
+The external data expands coverage to entailment, reading comprehension, and
+question classification. A verified Kev-only corpus is now prepared in
+`data/kev-v1/`, with new development/calibration partitions derived from training.
+Blind concatenation with legacy data is still unsafe: see [Data](DATA.md) for
+invalid Nimble downloads, overlap, and missing upstream split artifacts.
 
 ## Evidence sources and how to interpret them
 

@@ -18,6 +18,7 @@ from tqdm import tqdm
 from jev.engine import SystemOneEngine
 from jev.jev_api import api_key, ask_jev
 from jev.recast import TASKS, records
+from jev.rendering import RENDERER_VERSIONS
 
 
 def jev_dist(task, answer: dict) -> list[float]:
@@ -39,7 +40,7 @@ def local_dist(task, answer) -> list[float]:
 def get_jev_answers(task, n: int) -> list[dict]:
     cache = Path(f"data/jev_answers_{task.name}_{n}.jsonl")
     if cache.exists():
-        return [json.loads(l) for l in cache.open()]
+        return [json.loads(line) for line in cache.open()]
     key = api_key()
     rows = []
     with cache.open("w") as f:
@@ -58,12 +59,14 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--adapter", default=None)
     ap.add_argument("--calibrate", action="store_true")
+    ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
     args = ap.parse_args()
 
     task = TASKS[args.task]
     jev_rows = get_jev_answers(task, args.n)
     engine = SystemOneEngine(
-        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter
+        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter,
+        renderer_version=args.renderer,
     )
     question = task.question()
 
@@ -83,6 +86,7 @@ def main() -> None:
             {
                 "model": args.model,
                 "adapter": args.adapter,
+                "renderer_version": engine.renderer_version,
                 "task": args.task,
                 "calibrated": args.calibrate,
                 "n": n,

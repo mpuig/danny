@@ -9,6 +9,7 @@ import argparse
 import json
 
 from jev.engine import SystemOneEngine
+from jev.rendering import RENDERER_VERSIONS
 
 REQUEST = {
     "state": (
@@ -46,9 +47,10 @@ REQUEST = {
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="HuggingFaceTB/SmolLM2-135M")
+    ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
     args = ap.parse_args()
 
-    engine = SystemOneEngine(args.model)
+    engine = SystemOneEngine(args.model, renderer_version=args.renderer)
     response = engine.respond(REQUEST)
 
     assert set(response["answers"]) == set(REQUEST["questions"]), "missing answers"

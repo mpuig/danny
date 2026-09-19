@@ -1,9 +1,9 @@
-# Training the current MLX prototype
+# Training the MLX prototype
 
-This is the **v0 recipe that exists today**, not the full model/data plan. Read
-[Data](DATA.md) before mixing sources, and [Roadmap](ROADMAP.md) before changing
-rendering or primitive semantics. Those changes require new rendered data and
-retraining; old adapters are not evidence of performance on the new format.
+Two rendering versions are supported: `legacy-v0` for historical prompts/adapters,
+and `structured-v1` for canonical structured examples. Read [Data](DATA.md) before
+mixing sources. Old adapters do not establish performance on the new format;
+renderer mismatches are rejected rather than silently applying v1 to v0 weights.
 
 ## 1. Setup
 
@@ -15,7 +15,43 @@ MLX is the primary backend for both training and serving on Apple Silicon. Model
 download from Hugging Face on first use. Only live Jev collection requires
 `TYPESAFE_API_KEY` in the environment or the repository's `.env` file.
 
-## 2. Build recast gold-label data
+## 2. Recommended: canonical Kev data and structured-v1
+
+```bash
+# Only if this output directory has not already been prepared:
+uv run python scripts/prepare_data.py --out-dir data/kev-v1
+
+uv run python scripts/train_lora.py --model mlx-community/SmolLM3-3B-Base-bf16 \
+    --train data/kev-v1/train.jsonl --val data/kev-v1/development.jsonl \
+    --out adapters/smollm3-3b-structured-v1 --batch-size 4 --max-steps 800 --lr 1e-5
+```
+
+The preparer verifies source checksums, preserves provenance/structured inputs,
+reserves test groups, and derives separate development/calibration partitions.
+It refuses existing output directories. The trainer renders canonical records
+with `structured-v1` by default, checks train/development leakage before loading
+weights, validates/normalizes targets, and rejects non-single-token or colliding
+labels. `--renderer legacy-v0` can render canonical data for a controlled legacy
+ablation; it does not alter the canonical files. Run that ablation through
+`eval_dataset.py`: v0 direct calls retain Python representations, whereas the
+historical HTTP server flattens object state. Only v1 guarantees a shared structured
+serialization contract across training, direct inference, and HTTP.
+
+The trainer records `renderer_version` in adapter metadata, and arguments, data
+hashes, retained/skipped counts, optimizer steps, and example exposures in
+`training_manifest.json`. Both Python shuffling and MLX initialization are seeded.
+Existing adapter directories are refused rather than overwritten.
+
+This is still joint letter-token readout, not new primitive-specific heads.
+Option-order augmentation for canonical examples, a per-level Score model,
+temperature fitting, and periodic checkpoints remain future work.
+
+Use only `development.jsonl` for model selection. `calibration.jsonl` is reserved
+for future calibration fitting, and `test.jsonl` for frozen final evaluation.
+No full structured-v1 3B training run has been completed by the implementation
+smoke tests; those tests train the 135M on four fixture examples for two steps.
+
+## 3. Historical recast gold-label data
 
 ```bash
 uv run python scripts/build_data.py --per-task 2000 --val-per-task 200
@@ -48,7 +84,7 @@ truncation policy; report exclusions and revise this for the next data pipeline.
 The builder does not pin source revisions or preserve source IDs. A distinct seed
 is not a global split guarantee when other datasets are added.
 
-## 3. External Kev data
+## 4. Historical Kev prompt conversion
 
 The existing converter accepts the downloaded Kev request-shaped rows:
 
@@ -70,7 +106,7 @@ overlap. Kev calibration/development files are listed by its manifest but absent
 locally. Both local Nimble files are invalid downloads, not usable JSONL.
 See [Data](DATA.md) for the inventory and checks.
 
-## 4. Collect Jev soft targets (optional experiment)
+## 5. Collect Jev soft targets (legacy-format experiment)
 
 ```bash
 uv run python scripts/distill_from_jev.py --per-task 500 --out data/distill_train.jsonl
@@ -95,16 +131,17 @@ Current limitations:
 - Source IDs and a disjoint teacher validation partition are missing.
 
 The historical distilled adapter used `data/val.jsonl`, so that validation loss is
-not strictly held out. Before another distillation run, prepare group-disjoint
-training/development/calibration data and normalized targets. Then pass the
-appropriate files through `--train` and `--val`; the current trainer does not
-perform those safety checks for you.
+not strictly held out. The updated trainer now rejects that known overlap and
+normalizes near-unit targets. Before another distillation run, prepare disjoint
+partitions and migrate source provenance rather than bypassing the check.
+The collector still writes legacy prompts, so it cannot currently produce v1
+teacher-training data without an explicit migration.
 
 For a causal comparison, use the **same examples, augmentation, step budget, and
 splits** for gold, teacher-argmax, teacher-soft, and mixed-target runs. The existing
 8,000-row gold corpus versus 2,000-row soft corpus does not isolate soft-target value.
 
-## 5. Train LoRA
+## 6. Reproduce a recast-only v0 LoRA run
 
 Example for the recast-only v0 baseline, using a fresh adapter directory:
 
@@ -146,23 +183,26 @@ rows. Record actual exposure counts when comparing experiments.
 ### Operational and reproducibility limits
 
 Adapters use mlx-lm's `adapters.safetensors` and `adapter_config.json` format.
-Saving happens only at the end; there is no optimizer checkpoint/resume support.
+The latter now includes the renderer version. Saving happens only at the end;
+there is no optimizer checkpoint/resume support.
 Do not overlap heavy training jobs on a memory-limited machine. Earlier 3B runs
 were reported to take 25–45 minutes, with one interrupted before saving.
 
-The CLI seed controls Python batch order, not explicit MLX initialization seeding.
-Adapter metadata does not record complete arguments, data hashes, tokenizer or
-renderer versions. Label tokenization silently takes the first token in training.
-Fail-fast label checks, deterministic seeds, full manifests, and periodic checkpoints
-are required before treating the recipe as reproducible.
+The trainer now seeds Python batch order and MLX initialization, checks label
+encodings, validates targets/split overlap, and writes a training manifest.
+It does not yet pin/hash the base weights and tokenizer revision, record all
+software/hardware versions, or support periodic/resumable checkpoints. Numerical
+determinism across devices and dependency versions is not guaranteed.
 
-## 6. Serve the adapter
+## 7. Serve an adapter
 
 ```bash
 uv run python scripts/serve.py --model mlx-community/SmolLM3-3B-Base-bf16 \
     --adapter adapters/smollm3-3b-recast-v0 --port 8399
 ```
 
-Add `--calibrate` only as an explicitly evaluated contextual-correction variant.
-The server is still a development HTTP implementation; see
+For a v1 run, replace the adapter path with `adapters/smollm3-3b-structured-v1`.
+The engine selects the adapter's renderer automatically; older metadata without a
+renderer version selects v0. Add `--calibrate` only as an explicitly evaluated
+contextual-correction variant. The server is still a development HTTP implementation; see
 [Architecture](ARCHITECTURE.md) for its compatibility and serving limits.

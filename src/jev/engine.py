@@ -1,4 +1,4 @@
-"""v0 System One engine: single-forward-pass logit readout on an MLX model.
+"""Versioned System One engine: restricted-logit readout on an MLX model.
 
 No text is ever generated. Each question is rendered as a completion-style
 prompt; the answer distribution is a softmax restricted to the lettered label
@@ -9,7 +9,6 @@ over the common token prefix (state + template header), Nimble-style.
 from __future__ import annotations
 
 import math
-import warnings
 from dataclasses import asdict
 
 import mlx.core as mx
@@ -17,8 +16,14 @@ from mlx_lm import load
 from mlx_lm.models.cache import make_prompt_cache
 
 from .schema import Answer, ChoiceAnswer, NoulAnswer, Question, ScoreAnswer
+from .serialization import State, dumps, validate_state
+from .rendering import (
+    LETTERS, as_yes_no_choice, label_token_ids, legacy_choice_prompt,
+    legacy_score_prompt, render, resolve_renderer,
+)
 
-_LETTERS = [chr(ord("A") + i) for i in range(26)]
+# Backward-compatible export for historical data scripts.
+_LETTERS = LETTERS
 
 # Content-free states for contextual calibration (Zhao et al. 2021,
 # "Calibrate Before Use"): the model's answer distribution on these
@@ -44,9 +49,11 @@ class SystemOneEngine:
         model_name: str,
         contextual_calibration: bool = False,
         adapter_path: str | None = None,
+        renderer_version: str | None = None,
     ):
         self.model_name = model_name
         self.contextual_calibration = contextual_calibration
+        self.renderer_version = resolve_renderer(renderer_version, adapter_path)
         self.model, self.tokenizer = load(model_name, adapter_path=adapter_path)
         self._label_cache: dict[str, int] = {}
         self._prior_cache: dict[str, list[float]] = {}
@@ -56,18 +63,18 @@ class SystemOneEngine:
 
     def _label_token_id(self, label: str) -> int:
         if label not in self._label_cache:
-            ids = self.tokenizer.encode(label, add_special_tokens=False)
-            if len(ids) > 1:
-                warnings.warn(f"label {label!r} is {len(ids)} tokens; using the first")
-            self._label_cache[label] = ids[0]
+            self._label_cache[label] = label_token_ids(self.tokenizer, [label])[0]
         return self._label_cache[label]
 
     def _probs_from_logits(self, logits: mx.array, labels: list[str]) -> list[float]:
-        ids = [self._label_token_id(l) for l in labels]
+        ids = [self._label_token_id(label) for label in labels]
         if len(set(ids)) != len(ids):
             raise ValueError(f"label tokens collide for {labels}")
         restricted = mx.take(logits, mx.array(ids)).astype(mx.float32)
-        return mx.softmax(restricted).tolist()
+        probs = mx.softmax(restricted).tolist()
+        if any(not math.isfinite(p) or not 0 <= p <= 1 for p in probs):
+            raise ValueError("model produced invalid probabilities")
+        return probs
 
     def _score_batch(self, items: list[tuple[str, list[str]]]) -> list[list[float]]:
         """Restricted answer distributions for several prompts. Prompts that
@@ -93,8 +100,8 @@ class SystemOneEngine:
 
         # one pass over the shared prefix, then ALL suffixes in one batched
         # forward: tile the prefix KV cache across the batch dimension and
-        # read each row's logits at its own last real token. Near-flat
-        # latency in the number of questions.
+        # read each row's logits at its own last real token. Prefix memory is
+        # physically copied; latency and memory scaling still need measurement.
         n = len(items)
         cache = make_prompt_cache(self.model)
         self.model(mx.array(token_lists[0][:common])[None], cache=cache)
@@ -112,18 +119,18 @@ class SystemOneEngine:
         # position (its last real token) never attends to later pad tokens
         batch = mx.array([s + [pad_id] * (max_len - len(s)) for s in suffixes])
         last_idx = mx.array([len(s) - 1 for s in suffixes])
-        try:
-            # LM head only at each row's readout position: avoids materializing
-            # the (n, max_len, vocab) logits tensor, which dominates latency
-            hidden = self.model.model(batch, cache=cache)  # (n, max_len, H)
-            sel = hidden[mx.arange(n), last_idx]  # (n, H)
-            head = getattr(self.model, "lm_head", None)
-            logits = (
-                head(sel)
-                if head is not None
-                else self.model.model.embed_tokens.as_linear(sel)
-            )
-        except AttributeError:  # unfamiliar architecture: full logits fallback
+        # Select the execution path BEFORE mutating suffix caches. Never retry a
+        # partially executed forward against a cache it may already have advanced.
+        body = getattr(self.model, "model", None)
+        head = getattr(self.model, "lm_head", None)
+        if head is None:
+            embedding = getattr(body, "embed_tokens", None)
+            head = getattr(embedding, "as_linear", None)
+        if callable(body) and callable(head):
+            hidden = body(batch, cache=cache)
+            sel = hidden[mx.arange(n), last_idx]
+            logits = head(sel)
+        else:
             logits = self.model(batch, cache=cache)[mx.arange(n), last_idx]
         return [
             self._probs_from_logits(logits[i], labels)
@@ -132,69 +139,21 @@ class SystemOneEngine:
 
     # -- prompt builders ------------------------------------------------------
 
-    @staticmethod
-    def _choice_prompt(state: str, q: Question) -> tuple[str, list[str]]:
-        options = list(q.criteria.keys())
-        lines = []
-        for letter, name in zip(_LETTERS, options):
-            desc = q.criteria[name]
-            lines.append(f"{letter}. {name}" + (f": {desc}" if desc else ""))
-        prompt = (
-            "Read the state, then answer the question by choosing the single best option.\n\n"
-            f"State:\n{state}\n\n"
-            f"Question: {q.instructions}\n\n"
-            "Options:\n" + "\n".join(lines) + "\n\n"
-            "The best option is"
-        )
-        return prompt, options
+    # Compatibility aliases for historical data-building scripts. New pipelines
+    # import rendering directly and never need MLX just to prepare examples.
+    _choice_prompt = staticmethod(legacy_choice_prompt)
+    _score_prompt = staticmethod(legacy_score_prompt)
+    _as_yes_no_choice = staticmethod(as_yes_no_choice)
 
-    @staticmethod
-    def _score_prompt(state: str, q: Question) -> str:
-        # Levels are lettered for the readout (single-token labels in BPE
-        # vocabs, unlike " 0"), then mapped back to level numbers.
-        lines = [f"{_LETTERS[i]}. {desc}" for i, desc in enumerate(q.criteria)]
-        return (
-            "Read the state, then rate it on the scale below. "
-            "Pick the level whose description fits best.\n\n"
-            f"State:\n{state}\n\n"
-            f"Question: {q.instructions}\n\n"
-            "Levels:\n" + "\n".join(lines) + "\n\n"
-            "The best-fitting level is"
-        )
-
-    @staticmethod
-    def _as_yes_no_choice(q: Question) -> Question:
-        """Noul is answered through the choice template: on base models the
-        lettered readout separates classes far better than a bare yes/no
-        completion, which shows a strong acquiescence bias (measured on
-        SST-2: 0.535 acc / 0.297 ECE bare vs 0.695 / 0.088 lettered)."""
-        crit = q.criteria if isinstance(q.criteria, dict) else {}
-        return Question(
-            type="choice",
-            instructions=q.instructions,
-            criteria={"no": crit.get("false"), "yes": crit.get("true")},
-        )
-
-    def _render(self, state: str, q: Question) -> tuple[str, list[str]]:
-        """Prompt plus readout labels. Noul renders as A=no, B=yes, so its
-        raw distribution is [p_no, p_yes]."""
-        if q.type == "score":
-            prompt = self._score_prompt(state, q)
-            n = len(q.criteria)
-        elif q.type == "noul":
-            prompt, _ = self._choice_prompt(state, self._as_yes_no_choice(q))
-            n = 2
-        else:
-            prompt, _ = self._choice_prompt(state, q)
-            n = len(q.criteria)
-        return prompt, [f" {_LETTERS[i]}" for i in range(n)]
+    def _render(self, state: State, q: Question) -> tuple[str, list[str]]:
+        return render(state, q, self.renderer_version)
 
     # -- calibration -----------------------------------------------------------
 
     def _prior(self, q: Question) -> list[float]:
         """The model's label prior for this question, estimated as the mean
         answer distribution over content-free states. Cached per question."""
-        key = f"{q.type}|{q.instructions}|{q.criteria!r}"
+        key = dumps([self.renderer_version, asdict(q)])
         if key not in self._prior_cache:
             dists = self._score_batch([self._render(cf, q) for cf in _CONTENT_FREE_STATES])
             self._prior_cache[key] = [sum(col) / len(dists) for col in zip(*dists)]
@@ -210,7 +169,12 @@ class SystemOneEngine:
 
     # -- public API ------------------------------------------------------------
 
-    def ask(self, state: str, questions: dict[str, Question]) -> dict[str, Answer]:
+    def ask(self, state: State, questions: dict[str, Question]) -> dict[str, Answer]:
+        validate_state(state)
+        if not isinstance(questions, dict) or not questions:
+            raise ValueError("questions must be a nonempty object")
+        if any(not isinstance(key, str) or not isinstance(q, Question) for key, q in questions.items()):
+            raise ValueError("questions must map string IDs to Question objects")
         qids = list(questions)
         items = [self._render(state, questions[qid]) for qid in qids]
         raw = self._score_batch(items)
@@ -242,19 +206,24 @@ class SystemOneEngine:
     def respond(self, request: dict) -> dict:
         """Serve a Jev-shaped request and return a Jev-shaped response.
 
-        Request:  {"state": str, "questions": {id: {type, instructions, criteria?}}}
+        Request:  {"state": JSON, "questions": {id: {type, instructions, criteria?}}}
         Response: {"model", "answers": {id: {...}}, "usage": {...}}
 
-        Every question ID in the request appears in `answers` — the readout
-        cannot skip or fail to parse an answer by construction.
+        Successful calls return one typed answer per question ID, without parsing
+        generated text. Invalid requests or model execution errors still fail.
         """
-        questions = {
-            qid: Question(**spec) for qid, spec in request["questions"].items()
-        }
+        if not isinstance(request, dict) or "state" not in request:
+            raise ValueError("request must be an object containing state")
+        specs = request.get("questions")
+        if not isinstance(specs, dict) or not specs:
+            raise ValueError("questions must be a nonempty object")
+        if any(not isinstance(spec, dict) for spec in specs.values()):
+            raise ValueError("each question must be an object")
+        questions = {qid: Question(**spec) for qid, spec in specs.items()}
         start_tokens = self._input_tokens
         answers = self.ask(request["state"], questions)
         return {
-            "model": request.get("model", self.model_name),
+            "model": self.model_name,
             "answers": {qid: asdict(a) for qid, a in answers.items()},
             "usage": {
                 "input_tokens": self._input_tokens - start_tokens,

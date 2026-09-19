@@ -17,6 +17,7 @@ from tqdm import tqdm
 from jev.engine import SystemOneEngine
 from jev.recast import TASKS, records
 from jev.schema import Question
+from jev.rendering import RENDERER_VERSIONS
 
 
 def main() -> None:
@@ -29,10 +30,12 @@ def main() -> None:
     ap.add_argument("--calibrate", action="store_true")
     ap.add_argument("--adapter", default=None)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
     args = ap.parse_args()
 
     engine = SystemOneEngine(
-        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter
+        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter,
+        renderer_version=args.renderer,
     )
     task = TASKS[args.task]
     rng = random.Random(args.seed)
@@ -63,6 +66,7 @@ def main() -> None:
             {
                 "model": args.model,
                 "adapter": args.adapter,
+                "renderer_version": engine.renderer_version,
                 "task": args.task,
                 "calibrated": args.calibrate,
                 "n": args.n,

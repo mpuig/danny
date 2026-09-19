@@ -159,8 +159,8 @@ The distilled adapter and three-way results now exist, so earlier "in flight"
 status was stale. The local Nimble files are 404 bodies; Kev checksums match its
 manifest, but calibration/development files are missing.
 
-This documentation pass changes no model code, weights, or data. New requirements
-and tests are listed in the roadmap, not described as finished features.
+That documentation pass changed no model code, weights, or data. The subsequent
+implementation milestone is recorded separately in decision 20.
 
 ## 19. Optimize MLX before committing to a Rust runtime
 
@@ -169,3 +169,22 @@ inference, not a language rewrite for its own sake. Keep MLX as the main server
 option. Measure GPU time, tokenization, scheduling, and KV memory separately.
 Consider Rust only when it addresses a measured bottleneck or deployment need,
 and require model/tokenizer/rendering parity for any second backend.
+
+## 20. Implement data and rendering foundations before changing model heads
+
+Added a provenance-preserving Kev importer, deterministic connected-group splits,
+checksum/target/leakage validation, and canonical external evaluation. The prepared
+Kev-only corpus keeps test reserved and derives development/calibration from
+training; it does not make the old combined corpora safe or repair Nimble downloads.
+
+`structured-v1` preserves JSON boundaries and Noul identity with a common state
+prefix. Adapter metadata pins rendering; old adapters select `legacy-v0`. Training
+now rejects invalid label tokens and overlapping validation data, seeds MLX, and
+records hashes/arguments. The server preserves v1 structured state, returns 422 for
+validation failures, and reports the actual loaded backbone instead of a Jev alias.
+
+Regression tests cover data, rendering, HTTP behavior, cache retry safety, and a
+two-step 135M adapter round trip. Native BF16 single/batch inference differed by
+~0.03 on a fixture; FP32 reference parity passed. That precision issue remains
+open, rather than being hidden behind a loose tolerance. No full v1 quality run,
+specialized primitive head, fitted calibration, or bounded service is claimed.

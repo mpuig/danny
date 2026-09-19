@@ -1,9 +1,54 @@
 # Data inventory and integrity
 
-Local audit: **2026-09-19**. These are observations about files on the development
-machine, not guarantees about future downloads. `data/` is gitignored. No data was
-modified, no datasets were downloaded, and no teacher API calls were made during
-this audit.
+Original local audit: **2026-09-19**. These are observations about files on the
+development machine, not guarantees about future downloads. `data/` is gitignored.
+The later implementation run generated `data/kev-v1/` without changing source
+files, downloading datasets, or calling the teacher API.
+
+## Implemented canonical pipeline
+
+```bash
+# Expected to exit 1 while the two invalid Nimble downloads are present.
+uv run python scripts/audit_data.py data/external/*.jsonl
+# Choose a fresh output directory. This verifies Kev hashes before preparing data.
+uv run python scripts/prepare_data.py --out-dir data/kev-v1
+uv run python scripts/audit_data.py data/kev-v1/*.jsonl
+```
+
+`src/jev/data.py` defines `format_version: 1` examples retaining original structured
+state, `Question`, primitive, normalized target, original target, target origin,
+source, record ID, group ID, and upstream metadata. Rendering happens later.
+No MLX import or accelerator is needed to audit or prepare data.
+
+The preparer reserves the supplied test partition first. It derives new development
+and calibration partitions from training connected groups (10% each by default).
+These are **not** the missing upstream calibration/development partitions.
+
+Local default preparation:
+
+| Partition | Questions | Connected groups |
+|---|---:|---:|
+| Train | 8,769 | 6,400 |
+| Development | 1,128 | 800 |
+| Calibration | 1,103 | 800 |
+| Test | 1,048 | 640 |
+
+Matching uses record/group IDs and content after Unicode normalization, case folding,
+and whitespace collapse. It unwraps only known one-document Kev wrappers: `document`,
+`ticket.channel/body`, and a single `role/content` message. Rendering does not apply
+this normalization. Transitive overlaps stay in one group; a group touching test
+removes its training members. No retained training/test overlaps were found here.
+
+The generated manifest records source hashes, the upstream manifest, filtering,
+split policy/seed, exclusions, output hashes, and per-source/primitive counts.
+Existing output directories are refused. Banking77 and SST-5 questions remain in the
+original files but are excluded from this 26-option preparation. `--max-options 255`
+can preserve wide questions in canonical data, but current renderers cannot train
+or evaluate them.
+
+This corpus deliberately does **not** mix in the legacy recast/distillation files.
+New unrelated sources, fuzzy duplicates, and backbone pretraining exposure still
+require separate investigation.
 
 ## External files
 
@@ -119,7 +164,9 @@ across sources. Nothing here establishes absence of backbone pretraining exposur
 Four distillation rows have target sums of **0.99**: lines 49, 835, 1516, and 1859.
 All other rows sum to one within `1e-6`. Validate finiteness, bounds, and nonzero
 mass, then normalize rounded distributions before using them in losses or metrics.
-The current loader does not do this.
+The new trainer does this for canonical and legacy inputs, accepting at most 0.02
+absolute sum error and rejecting malformed or zero-mass targets. Canonical examples
+retain `original_target`; existing legacy source files are left unchanged.
 
 Recomputed from the stored targets:
 
@@ -130,7 +177,10 @@ Recomputed from the stored targets:
 These replace the earlier undocumented 88.4% / 45% summaries. Teacher agreement
 with labels is not a measurement of the student's performance or calibration.
 
-## Before the next training run
+## Before expanding beyond the prepared Kev-only corpus
+
+The new preparer handles validation, provenance, and within-corpus partitioning.
+The following still apply when migrating or mixing other sources:
 
 1. Reject malformed downloads and verify hashes before conversion.
 2. Preserve source revision, source/group ID, primitive, original structured state,
@@ -139,8 +189,8 @@ with labels is not a measurement of the student's performance or calibration.
    Exclude training overlaps across **all** sources, not just within each file.
 4. Keep SST-5 out while SST-2 is a reserved evaluation dataset. Verify other
    cross-source overlaps rather than relying on different random seeds.
-5. Obtain the missing Kev partitions or define a documented group-disjoint split
-   from its training partition. Never fit calibration on its test partition.
+5. Use the newly derived group-disjoint partitions, or obtain and verify the missing
+   upstream ones. Never fit calibration on the test partition.
 6. Do not concatenate existing rendered files as the definitive training mix:
    they lose provenance and use inconsistent augmentation and serialization.
 7. Keep teacher evaluation caches out of training. Pin teacher versions and record

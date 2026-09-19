@@ -6,9 +6,15 @@ changes**. Reviewed 2026-09-19. MLX remains the primary training and serving bac
 ## Current model: restricted-token readout
 
 `src/jev/engine.py` loads an MLX language model, optionally with a LoRA adapter.
-For each question it renders a prompt, reads final-position logits for ` A` through
-` Z`, and applies softmax over those labels only. Application code serializes the
-answer. There is no autoregressive answer generation.
+It uses the framework-independent `src/jev/rendering.py` to render prompts, reads
+final-position logits for ` A` through ` Z`, and applies softmax over those labels
+only. Application code serializes the answer. There is no answer-generation loop.
+
+Bare models default to `structured-v1`. Adapters select their recorded
+`renderer_version`; metadata-free historical adapters select `legacy-v0`.
+`--renderer` permits an explicit choice but rejects mismatches with an adapter.
+New training files can be canonical examples, rendered at load time. Legacy
+pre-rendered files retain v0 prompts and cannot be silently upgraded.
 
 This is a decision-model approximation, not a recovered implementation of Jev.
 A vocabulary projection restricted to label rows already acts as a classifier head;
@@ -28,41 +34,48 @@ respond(request)
 | Primitive | Current computation | Important limitation |
 |---|---|---|
 | Choice | Whole list of named/described options; letter-token softmax | 26-option cap; position and label-token bias |
-| Noul | Converted to Choice with `A=no`, `B=yes`; return `p_yes` | Original primitive identity is absent from the model prompt |
+| Noul | Binary letter readout `A=no`, `B=yes`; return `p_yes` | v1 retains a Noul type marker; legacy-v0 erases it |
 | Score | Whole list of lettered level descriptions; categorical softmax | Levels interact in one prompt, unlike the separate-level behavior described by Jev |
 
 Score uses zero-based level indices: `score = sum(i * p_i)`. This expectation is
 not an exact numeric measurement or a separate regression prediction.
 
-**Noul identity:** a Noul and corresponding no/yes Choice can produce identical
-prompts here. Jev's [limitations page](https://docs.typesafe.ai/model-jaggedness/jev-1.13)
-explicitly says their probabilities need not match. Teacher targets that differ
-by primitive cannot be learned from identical inputs. Preserve a type marker or
-distinct template before extending cross-primitive distillation.
+**Noul identity:** legacy-v0 can produce identical prompts for a Noul and a
+corresponding no/yes Choice. Jev's
+[limitations page](https://docs.typesafe.ai/model-jaggedness/jev-1.13) says their
+probabilities need not match. `structured-v1` now preserves a type marker after
+state, allowing different behavior to be learned. Existing v0 adapters have not
+been retrained for this format.
 
 **Score semantics:** the [Score docs](https://docs.typesafe.ai/primitives/score)
 say each level is evaluated separately, without its number or neighboring levels.
 Our joint-level readout differs. Compare it with a per-level scorer; the docs do
 not disclose Jev's exact scoring, normalization, or attention implementation.
 
-### Structured input is not yet implemented deliberately
+### Versioned structured input
 
-The schema annotates instructions as strings. Non-string instructions and
-criterion values can pass through at runtime, but f-strings render them using
-Python representations. The server turns object state into `key: value` lines;
-other non-string state uses `str(state)`.
+`src/jev/serialization.py` validates JSON, rejecting duplicate object keys,
+nonfinite numbers, unsupported values, and excessive nesting. Schema entries
+accept strings, objects, arrays, or null; state accepts strings, objects, or arrays.
+The schema permits 255 Choice options; both current renderers explicitly limit
+the letter readout to 26. Training and inference require distinct single-token labels.
 
-This conversion is ambiguous. These distinct states both become `a: x\nb: y`:
+In v1, state and every user-defined instruction/criterion are serialized as complete
+JSON values, preserving nested fields, arrays, nulls, string boundaries, and option
+order. The header and state prefix are identical across primitive types. Type-specific
+material comes afterward, so mixed requests can share state computation.
+
+Legacy rendering is retained for historical adapters, including the server's old
+`key: value` flattening. That old path can collapse these states to the same text:
 
 ```python
 {"a": "x\nb: y"}
 {"a": "x", "b": "y"}
 ```
 
-A shared, versioned serializer is needed across training, evaluation, and serving.
-It must preserve strings, nested fields, arrays, nulls, and option order. This is
-important for instructions referring to paths such as `ticket.messages[0].text`.
-Serialization alone does not make state immune to prompt injection.
+The v1 path keeps them distinct, with golden-prompt and HTTP regression tests.
+This preserves input information; it is not a prompt-injection defense or proof
+that an untuned model follows structured paths reliably.
 
 ## Current inference execution
 
@@ -76,20 +89,26 @@ prefix, and uses caching when that prefix has at least eight tokens.
 
 With causal attention, those readout positions do not see later padding. Each
 row sees the prefix and its own suffix, not another question. This provides the
-intended information boundary, but numerical parity needs regression tests with
-an explicit tolerance; bit-identical outputs are not a general guarantee.
+intended information boundary, but bit-identical outputs are not a general guarantee.
+
+New local SmolLM2-135M tests found **~0.03 probability drift** between native BF16
+single/full-prefill and batched/cached scoring on a mixed structured request.
+Converting the test model to FP32 reduced differences below `2e-5`. Tests use that
+FP32 oracle for cache correctness and separately check native batch reordering.
+The production path still uses the loaded model's precision: native single/batch
+threshold stability remains an open issue, not a passed parity guarantee.
 
 Limitations:
 
 - Cache memory scales with question count because the prefix is copied.
 - Complete prompts are still tokenized separately.
-- Choice/Noul and Score have different text before the state, so mixed requests
-  can lose state-prefix sharing and fall back to sequential full-prompt scoring.
+- Legacy Choice/Noul and Score templates have different text before state and
+  can lose state-prefix sharing. structured-v1 fixes that prefix mismatch.
 - New questions require three extra content-free evaluations when correction is on.
 - There is no request-size bound, microbatch policy, or bounded prior cache.
-- The `AttributeError` fallback may reuse an already-mutated cache if failure
-  occurs after the optimized forward begins. It needs a safe capability check or
-  fresh cache rather than a broad retry around mutable state.
+- Architecture support remains limited. The optimized body/head path is now chosen
+  before suffix execution; errors after execution starts propagate rather than
+  retrying against a potentially mutated cache. A regression test covers this.
 
 Historical timing: 50 questions in 0.29 s and 100 in 0.30 s on SmolLM2-135M under
 concurrent training load. This is not a controlled 3B benchmark or evidence that
@@ -136,13 +155,13 @@ semantic compatibility. Do not transfer thresholds across definitions or primiti
 | Contract | Current repository |
 |---|---|
 | `POST /v1/systemone`, answers keyed by question ID | Implemented for basic requests; IDs stay out of prompts |
-| String/object/array state; structured instructions and criteria | Accepted unevenly; serialization and annotations need correction |
+| String/object/array state; structured instructions and criteria | Deliberately serialized/validated in v1; historical conversion retained in v0 |
 | Choice up to 255 options | 1–26 supported |
 | Score with 2–10 levels and weighted mean | Implemented, with different model-side level handling |
 | Noul probability, no separate confidence | Response shape implemented |
 | Choice/Score confidence semantics | Different from the published adapter |
-| Response identifies the actual model version | Echoes request `model`, or uses the loaded backbone name |
-| Validation failure uses HTTP 422 | Selected exceptions return HTTP 400; validation is incomplete |
+| Response identifies the actual model version | Returns the loaded backbone name, not a requested Jev alias; full adapter identity remains TODO |
+| Validation failure uses HTTP 422 | Implemented for request/schema errors; production error handling remains incomplete |
 | `GET /v1/models` | Not implemented |
 | Context limits and usage | No enforced token budget; local execution counters are not Jev billing semantics |
 

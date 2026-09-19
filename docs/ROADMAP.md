@@ -1,7 +1,25 @@
 # Model and serving roadmap
 
-Status: **planned work**, not implemented features. Updated 2026-09-19 after the
-code/data review and clarification of the project goal.
+Status: **foundations partly implemented; later milestones remain planned**.
+Updated 2026-09-19. Acceptance gates below are not all met.
+
+## Implementation status
+
+- **Phase 1, partial:** verified, provenance-preserving Kev importer; canonical
+  records; connected-group train/dev/calibration/test splits; hashes and leakage
+  checks. A local corpus is prepared. External gold evaluation saves per-example
+  predictions. Cross-source migration, teacher versioning, task-family holdouts,
+  and tokenizer/base-weight revision capture remain open.
+- **Phase 2, partial:** shared v1 JSON renderer; explicit primitive identity; legacy
+  compatibility; strict label tokens; request validation; Python/HTTP/model smoke
+  tests. Confidence parity, native-precision stability, and broader context/backbone
+  tests remain open.
+- **Phases 3–5:** not started. Only a two-step 135M fixture-training smoke test has
+  run, not a model-quality experiment or serving benchmark.
+
+The native BF16 parity check found ~0.03 single/batch probability drift on a 135M
+fixture. FP32 cache tests pass, but production precision still needs investigation.
+Do not treat the new tests as proof that the serving acceptance gate has passed.
 
 ## Destination
 
@@ -87,8 +105,8 @@ Training work:
   instruction-tuned is an experiment, not a categorical restriction.
 - Compare gold, teacher-argmax, teacher-soft, and mixed targets on matched examples,
   augmentation, and optimizer exposure. Keep outcome accuracy separate from fidelity.
-- Add explicit MLX seeds, periodic checkpoints, and manifests linking adapters to
-  data, renderer, tokenizer, backbone revision, hyperparameters, and readout design.
+- Extend the new MLX seeding and data/renderer/argument manifests with pinned
+  tokenizer/backbone revisions, environment details, and periodic checkpoints.
 - Fit any temperature parameters only on a separate calibration partition.
 
 **Exit:** a frozen task-family/rubric holdout suite shows useful predictive quality
