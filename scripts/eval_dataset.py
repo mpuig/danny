@@ -52,6 +52,8 @@ def main():
     parser.add_argument("--data", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--adapter")
+    parser.add_argument("--precision", choices=["native", "float16", "float32"], default="native")
+    parser.add_argument("--execution-mode", choices=["independent", "shared"], default="independent")
     parser.add_argument("--renderer", choices=RENDERER_VERSIONS)
     parser.add_argument("--calibrate", action="store_true", help="contextual correction, not temperature fitting")
     parser.add_argument("--n", type=int, default=0, help="0 = all; otherwise seeded example subsample")
@@ -76,7 +78,8 @@ def main():
     if args.n and args.n < len(examples):
         examples = random.Random(args.seed).sample(examples, args.n)
     engine = SystemOneEngine(args.model, adapter_path=args.adapter,
-                             contextual_calibration=args.calibrate, renderer_version=version)
+                             contextual_calibration=args.calibrate, renderer_version=version,
+                             precision=args.precision, execution_mode=args.execution_mode)
     out.mkdir(parents=True, exist_ok=False)
     rows = []
     # Exclusive creation and a final report distinguish complete runs from partial

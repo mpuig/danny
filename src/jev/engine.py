@@ -2,8 +2,8 @@
 
 No text is ever generated. Each question is rendered as a completion-style
 prompt; the answer distribution is a softmax restricted to the lettered label
-tokens at the final position. Multi-question requests share one KV-cache pass
-over the common token prefix (state + template header), Nimble-style.
+tokens at the final position. Independent execution is the stable default.
+Shared-prefix execution is opt-in: native BF16 rounding can depend on batch shape.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import math
 from dataclasses import asdict
 
 import mlx.core as mx
+from mlx.utils import tree_map
 from mlx_lm import load
 from mlx_lm.models.cache import make_prompt_cache
 
@@ -50,11 +51,26 @@ class SystemOneEngine:
         contextual_calibration: bool = False,
         adapter_path: str | None = None,
         renderer_version: str | None = None,
+        precision: str = "native",
+        execution_mode: str = "independent",
     ):
+        if precision not in ("native", "float16", "float32"):
+            raise ValueError("precision must be native, float16, or float32")
+        if execution_mode not in ("independent", "shared"):
+            raise ValueError("execution_mode must be independent or shared")
+        self.precision = precision
+        self.execution_mode = execution_mode
         self.model_name = model_name
         self.contextual_calibration = contextual_calibration
         self.renderer_version = resolve_renderer(renderer_version, adapter_path)
         self.model, self.tokenizer = load(model_name, adapter_path=adapter_path)
+        if precision != "native":
+            dtype = getattr(mx, precision)
+            self.model.update(tree_map(
+                lambda x: x.astype(dtype) if mx.issubdtype(x.dtype, mx.floating) else x,
+                self.model.parameters(),
+            ))
+        self.model.eval()
         self._label_cache: dict[str, int] = {}
         self._prior_cache: dict[str, list[float]] = {}
         self._input_tokens = 0
@@ -77,15 +93,16 @@ class SystemOneEngine:
         return probs
 
     def _score_batch(self, items: list[tuple[str, list[str]]]) -> list[list[float]]:
-        """Restricted answer distributions for several prompts. Prompts that
-        share a token prefix (same state, same template) are scored with one
-        pass over that prefix plus ONE batched pass over all suffixes (prefix
-        KV tiled across the batch). Questions stay strictly independent: each
-        row's context is exactly prefix + its own suffix."""
+        """Restricted distributions with independent or opt-in shared execution.
+
+        Shared execution tiles prefix KV; each row sees only its own suffix.
+        This isolates information, not low-precision rounding. Independent mode
+        gives a prompt the same computation regardless of other questions.
+        """
         token_lists = [self.tokenizer.encode(p) for p, _ in items]
 
         common = 0
-        if len(items) > 1:
+        if len(items) > 1 and getattr(self, "execution_mode", "independent") == "shared":
             limit = min(len(t) for t in token_lists) - 1  # keep suffixes non-empty
             while common < limit and len({t[common] for t in token_lists}) == 1:
                 common += 1
@@ -94,7 +111,7 @@ class SystemOneEngine:
             out = []
             for tokens, (_, labels) in zip(token_lists, items):
                 self._input_tokens += len(tokens)
-                logits = self.model(mx.array(tokens)[None])[0, -1, :]
+                logits = self._last_logits(mx.array(tokens)[None], mx.array([len(tokens) - 1]))[0]
                 out.append(self._probs_from_logits(logits, labels))
             return out
 
@@ -119,8 +136,19 @@ class SystemOneEngine:
         # position (its last real token) never attends to later pad tokens
         batch = mx.array([s + [pad_id] * (max_len - len(s)) for s in suffixes])
         last_idx = mx.array([len(s) - 1 for s in suffixes])
-        # Select the execution path BEFORE mutating suffix caches. Never retry a
-        # partially executed forward against a cache it may already have advanced.
+        logits = self._last_logits(batch, last_idx, cache=cache)
+        return [
+            self._probs_from_logits(logits[i], labels)
+            for i, (_, labels) in enumerate(items)
+        ]
+
+    def _last_logits(self, batch, last_idx, cache=None):
+        """Project only final positions on supported dense Llama/Qwen backbones.
+
+        Select the path before execution; never retry a mutated cache. Both
+        independent and shared execution use the same final-position projection.
+        """
+        n = batch.shape[0]
         body = getattr(self.model, "model", None)
         head = getattr(self.model, "lm_head", None)
         if head is None:
@@ -132,10 +160,7 @@ class SystemOneEngine:
             logits = head(sel)
         else:
             logits = self.model(batch, cache=cache)[mx.arange(n), last_idx]
-        return [
-            self._probs_from_logits(logits[i], labels)
-            for i, (_, labels) in enumerate(items)
-        ]
+        return logits
 
     # -- prompt builders ------------------------------------------------------
 

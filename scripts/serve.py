@@ -68,13 +68,15 @@ def main() -> None:
     ap.add_argument("--adapter", default=None)
     ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
     ap.add_argument("--calibrate", action="store_true")
+    ap.add_argument("--precision", choices=["native", "float16", "float32"], default="native")
+    ap.add_argument("--execution-mode", choices=["independent", "shared"], default="independent")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8399)
     args = ap.parse_args()
 
     engine = SystemOneEngine(
         args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter,
-        renderer_version=args.renderer,
+        renderer_version=args.renderer, precision=args.precision, execution_mode=args.execution_mode,
     )
     # Retain the tested single-thread path until a controlled worker is added.
     server = HTTPServer((args.host, args.port), make_handler(engine))

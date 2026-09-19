@@ -17,9 +17,11 @@ Updated 2026-09-19. Acceptance gates below are not all met.
 - **Phases 3–5:** not started. Only a two-step 135M fixture-training smoke test has
   run, not a model-quality experiment or serving benchmark.
 
-The native BF16 parity check found ~0.03 single/batch probability drift on a 135M
-fixture. FP32 cache tests pass, but production precision still needs investigation.
-Do not treat the new tests as proof that the serving acceptance gate has passed.
+The stability investigation found up to 0.031 drift on SmolLM2-135M and 0.060 on
+Qwen3-0.6B, including a native Qwen argmax flip. Independent execution is now the
+stable default; shared execution is opt-in. FP32 shared tests reduced drift below
+0.00001 on the measured fixtures. See [Experiments](EXPERIMENTS.md). Production
+serving acceptance still requires broader quality and load tests.
 
 ## Destination
 

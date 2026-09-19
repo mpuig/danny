@@ -52,6 +52,16 @@ say each level is evaluated separately, without its number or neighboring levels
 Our joint-level readout differs. Compare it with a per-level scorer; the docs do
 not disclose Jev's exact scoring, normalization, or attention implementation.
 
+### Execution policy update
+
+Independent scoring is now the default, preventing sibling questions from changing
+the compute shape of a decision. Shared prefix caching requires
+`--execution-mode shared`; `--precision float32` substantially reduces measured
+drift. Native shared execution is experimental. Both paths project only the last
+hidden position on supported backbones. See [Experiments](EXPERIMENTS.md) for
+SmolLM/Qwen measurements; historical timing and projection results are not a parity
+guarantee for the updated path.
+
 ### Versioned structured input
 
 `src/jev/serialization.py` validates JSON, rejecting duplicate object keys,

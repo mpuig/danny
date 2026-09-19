@@ -53,6 +53,7 @@ class EngineContractTests(unittest.TestCase):
 
     def test_mutated_cache_is_not_retried(self):
         engine = self.engine()
+        engine.execution_mode = "shared"
         engine.tokenizer = SimpleNamespace(encode=lambda prompt: list(range(12)) + [1 if prompt == "a" else 2], eos_token_id=0)
         class Model:
             def __init__(self):
@@ -89,6 +90,10 @@ class ModelParityTests(unittest.TestCase):
         }
         engine = self.engine
         items = [engine._render(state, q) for q in questions.values()]
+        independent = engine._score_batch(items)
+        for item, row in zip(items, independent):
+            self.assertEqual(row, engine._score_batch([item])[0])
+        engine.execution_mode = "shared"
         native = engine._score_batch(items)
         native_reversed = list(reversed(engine._score_batch(list(reversed(items)))))
         for row, reversed_row in zip(native, native_reversed):
