@@ -1,6 +1,7 @@
 // Official Typesafe TS SDK pointed at (a) our local jev-compatible server and
-// (b) the real Jev API. Verifies our server is a drop-in: every question
-// answered, schema-correct, distributions valid.
+// (b) the real Jev API. Smoke-tests one request: all question IDs answered,
+// selected field types correct, Choice probabilities normalized. This does not
+// establish full API compatibility, equivalent judgments, or calibration.
 //
 //   node test.ts                       (local server on :8399 must be running)
 //   node test.ts --with-jev            (also hits the real API; key from ../../.env)

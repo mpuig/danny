@@ -1,7 +1,9 @@
 # Model and serving roadmap
 
 Status: **foundations, controlled model/readout experiments, and bounded serving implemented**.
-Updated 2026-09-19. Acceptance gates below are not all met.
+Updated 2026-09-19. Acceptance gates below are not all met. The numbered phases
+retain the full plan, including completed steps; the status summary identifies
+current progress and outstanding evidence.
 
 ## Implementation status
 
@@ -115,8 +117,8 @@ Training work:
   instruction-tuned is an experiment, not a categorical restriction.
 - Compare gold, teacher-argmax, teacher-soft, and mixed targets on matched examples,
   augmentation, and optimizer exposure. Keep outcome accuracy separate from fidelity.
-- Extend the new MLX seeding and data/renderer/argument manifests with pinned
-  tokenizer/backbone revisions, environment details, and periodic checkpoints.
+- Retain implemented MLX seeding, data/configuration manifests, tokenizer/backbone
+  hashes and revisions, and environment details. Add periodic/resumable checkpoints.
 - Fit any temperature parameters only on a separate calibration partition.
 
 **Exit:** a frozen task-family/rubric holdout suite shows useful predictive quality

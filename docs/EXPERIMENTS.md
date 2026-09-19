@@ -152,7 +152,8 @@ or rubric cases. On the 1,128 development questions:
 | Qwen3-0.6B, LR 1e-5 | .460 → .448 | .256 → .252 | .033 → .022 | 81.3% |
 
 Qwen's paired NLL change was −0.0121, with group-bootstrap 95% interval
-[−0.0212, −0.0038] (2,000 draws of whole groups). Argmax does not change.
+[−0.0212, −0.0038] (2,000 draws of whole groups). This is an **NLL interval**, not
+an interval for ECE; the comparison report does not bootstrap ECE. Argmax does not change.
 Qwen Score MAE was .587 raw / .592 scaled: optimizing NLL does not optimize every
 metric. These development intervals are descriptive after model selection, not a
 substitute for a frozen final test.

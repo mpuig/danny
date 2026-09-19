@@ -30,14 +30,16 @@ can coexist with a model too uninformative to automate useful work.
 | SST-2 validation split | Cross-dataset movie-sentiment transfer: canonical question and criteria match training IMDB |
 | Tweet-emotion test split | A held-out question relative to the four-task recast mix, still sentiment-adjacent |
 | Kev test, after training on Kev train | In-family performance, including grouped robustness variants |
-| Unfamiliar rubric/task-family suite | **Not implemented**; needed for the central generalization claim |
+| Synthetic unfamiliar rubrics | 42 cases / 14 groups evaluated; hand-authored labels need independent review; now a regression diagnostic |
+| Independently reviewed workflow benchmark | **Not implemented**; needed for workflow value and risk–coverage claims |
 
 There is no held-out Score family in the recast suite. Public dataset names and
 splits do not rule out pretraining exposure. Historical tuning against SST-2 also
 means it should not be treated as a pristine final test for new research choices.
 
-Check [Data](DATA.md) before training: the current validation set overlaps teacher
-and Kev training. Different seeds do not ensure separation. For new experiments,
+Check [Data](DATA.md) before training: the legacy `data/val.jsonl` overlaps teacher
+and converted Kev training. The canonical v1 partitions pass the declared grouped
+separation checks. Different seeds alone do not ensure separation. For new experiments,
 reserve test groups first and keep calibration separate from model-selection data.
 Kev test questions/variants share documents; confidence intervals must respect
 those groups rather than treating all 1,048 converted questions as independent.
@@ -92,14 +94,15 @@ in `report.json`. Existing output directories are refused. A partial predictions
 file without a final report indicates an interrupted run.
 
 By default it evaluates all examples; `--n` selects a seeded **example** subsample,
-not a group sample. Current reports are point estimates without bootstrap intervals.
-They use one question per inference call and are not serving-throughput benchmarks.
+not a group sample. Individual reports contain point estimates; `compare_runs.py`
+adds whole-group bootstrap intervals for matched runs. Evaluations use one question
+per inference call and are not serving-throughput benchmarks.
 Soft teacher targets are rejected here; use a separate fidelity evaluation.
 `eval_baseline.py` still handles only the six registered recast tasks.
 
 Do not use the reserved test partition as the trainer's `--val`: that is model
-selection even if the trainer only prints loss. Tune on development and reserve
-calibration for future fitted correction.
+selection even if the trainer only prints loss. Tune on development and use only
+the calibration partition to fit temperatures.
 
 ### SDK smoke test
 
@@ -229,23 +232,28 @@ sensitivity is a robustness goal, not a promise of behavioral replication.
 The canonical Kev preparer and external evaluator now provide grouped partitions,
 manifests, and per-example predictions. Remaining gaps include:
 
-1. **Data/provenance:** migrate other sources, verify cross-source overlap, and
-   pin backbone/tokenizer/software revisions in addition to current data hashes.
-2. **Probability quality:** paired bootstrap intervals, reliability plots,
-   classwise/primitive-level analysis, and raw/corrected/temperature-scaled variants.
-3. **Rubric transfer:** same state under different questions and changed criteria;
-   unfamiliar task families; missing evidence; structured paths; contrastive pairs.
-4. **Primitive behavior:** preserve Noul identity; compare joint versus per-level
-   Score models; test applicability gates versus relative Choice selection.
+1. **Data/provenance:** migrate other sources and investigate cross-source/fuzzy
+   overlap. V1 runs already record backbone/tokenizer hashes, revisions, software,
+   and data identities; complete historical provenance cannot be reconstructed.
+2. **Probability quality:** extend the implemented paired group-bootstrap analysis
+   across seeds and budgets; add reliability plots and classwise/threshold-local
+   analysis. Evaluate raw, corrected, and scaled variants under distribution shift.
+3. **Rubric transfer:** independently review/expand the 42-case diagnostic; freeze
+   new task-family/workflow cases with changed criteria, missing evidence, structured
+   paths, and contrastive pairs before new model selection.
+4. **Primitive behavior:** build on implemented Noul identity and joint/per-level
+   Score pilots with matched-compute comparisons and broader quality checks; test
+   applicability gates versus relative Choice selection.
 5. **Workflow usefulness:** error cost, risk–coverage, threshold-local reliability,
    and final actions. Weighted composite scores are not automatically calibrated
    event probabilities, and marginal probabilities need not be independent.
 6. **Engine correctness:** extend the current regression suite across backbones,
    adapters, lengths, correction modes, and native precision. Resolve or bound
    single/batch numerical drift; FP32 fixture parity is not a deployment guarantee.
-7. **Serving:** target-hardware latency percentiles, throughput, and peak memory
-   across state length, question count, option count, concurrency, and cold/warm
-   correction caches. Compare serial and concurrent baselines fairly.
+7. **Serving:** extend the completed HTTP latency/throughput/memory sweeps to
+   representative application traffic, longer load runs, and additional configurations.
+   The measured state/question/option/concurrency and cold/warm-cache fixtures are
+   in [Experiments](EXPERIMENTS.md), not production service-level guarantees.
 
 Select thresholds and model variants on development/calibration data, then freeze
 them before final test evaluation. Arithmetic and broad reasoning tests diagnose

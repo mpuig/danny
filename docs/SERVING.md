@@ -4,36 +4,285 @@
 worker loads the model and owns every MLX operation; HTTP threads only parse,
 queue, and serialize requests. Independent execution remains the numerical default.
 
-```bash
-uv run python scripts/serve.py --model HuggingFaceTB/SmolLM2-135M \
-  --adapter adapters/smollm2-135m-structured-v1 --port 8399
-curl http://127.0.0.1:8399/v1/models
-curl http://127.0.0.1:8399/metrics
+## Run SmolLM and Qwen side by side
+
+Run these commands from the repository root, in separate terminals. They work in
+**fish** as well as Bash; no heredocs or shell-specific variable assignments are needed.
+
+**Terminal 1 — SmolLM on port 8399:**
+
+```fish
+uv run python scripts/serve.py \
+  --model HuggingFaceTB/SmolLM2-135M \
+  --adapter adapters/smollm2-135m-structured-v1 \
+  --port 8399
 ```
 
-Weights are local experiment artifacts, not bundled with this repository. Optional
-`--temperature FILE` must match the model, readout, renderer, precision, execution
-policy, microbatch size, and contextual-correction setting used to fit it. Older
-artifacts from the fixed-size evaluator imply a microbatch of four.
+**Terminal 2 — Qwen on port 8400:**
+
+```fish
+uv run python scripts/serve.py \
+  --model Qwen/Qwen3-0.6B \
+  --adapter adapters/qwen3-0.6b-structured-v1-lr1e-5 \
+  --port 8400
+```
+
+Use the **`lr1e-5` Qwen adapter**, not the similarly named earlier run. It reached
+81.3% development accuracy, versus 67.0% for SmolLM and 39.6% for the earlier Qwen
+run. These results do not guarantee correct answers on your tickets; see
+[Experiments](EXPERIMENTS.md) for the evaluation scope.
+
+Wait for a startup JSON line containing `"ready": true`. Leave each server running;
+use another terminal to send requests. Press **Ctrl+C** in a server terminal to stop
+that process. If a port is already occupied, stop its server or choose another port.
+
+Each process loads one model/adapter pair. Choose the **URL/port** to select a server;
+a request's `model` field does not load or route to another model. Both servers can
+accept `"model": "jev-latest"` as a compatibility alias, but neither runs Jev.
+They return their actual model identity.
+
+Both processes share the GPU and consume additional memory. Simultaneous work can
+change latency; the isolated benchmarks do not guarantee the same speed under contention.
+
+Weights and temperature files are local experiment artifacts, not bundled in git.
+Base models download from Hugging Face when needed; adapters must already exist or
+be trained using [Training](TRAINING.md). To require cached base-model files, prefix
+a launch command with `env HF_HUB_OFFLINE=1`.
+
+### Check both servers
+
+```fish
+curl -sS http://127.0.0.1:8399/v1/models | jq
+curl -sS http://127.0.0.1:8400/v1/models | jq
+curl -sS http://127.0.0.1:8400/health | jq
+curl -sS http://127.0.0.1:8400/metrics | jq
+```
+
+## Send a request and format the response
+
+This fish-compatible example sends all three question types to Qwen. Change `8400`
+to `8399` to send the same request to SmolLM. No API key is required locally.
+
+```fish
+curl -sS http://127.0.0.1:8400/v1/systemone \
+  -H 'Content-Type: application/json' \
+  --data-binary '{
+    "model": "jev-latest",
+    "state": {
+      "ticket_message": "I was charged twice. Please refund the duplicate charge."
+    },
+    "questions": {
+      "refund_requested": {
+        "type": "noul",
+        "instructions": "Does ticket_message explicitly request a refund?"
+      },
+      "department": {
+        "type": "choice",
+        "instructions": "Which department should handle this ticket?",
+        "criteria": {
+          "billing": "Payments, charges, and refunds.",
+          "technical": "Technical problems.",
+          "sales": "Questions about purchasing."
+        }
+      },
+      "frustration": {
+        "type": "score",
+        "instructions": "How frustrated is the customer?",
+        "criteria": ["Calm", "Annoyed", "Angry"]
+      }
+    }
+  }' | jq
+```
+
+For reusable payloads, save just the JSON object above as `request.json`, then run:
+
+```fish
+curl -sS http://127.0.0.1:8400/v1/systemone \
+  -H 'Content-Type: application/json' \
+  --data-binary @request.json | jq '.answers'
+```
+
+A JSON file also avoids shell-quoting problems when text contains apostrophes.
+Fish does not support Bash's `<<'JSON'` heredoc syntax.
+
+Replace the final formatter in either command with one of these:
+
+```fish
+# Indented JSON, including model identity and usage:
+jq
+
+# Only answers:
+jq '.answers'
+
+# Round numbers for display only; retain raw values for decisions/evaluation:
+jq '.answers | walk(if type == "number" then (. * 1000 | round) / 1000 else . end)'
+
+# Without jq:
+uv run python -m json.tool
+```
+
+`noul` is the probability of yes. `choice` is the highest-probability option.
+`score` is a weighted mean of zero-based levels, so this example uses a 0–2 scale.
+`confidence` is a derived concentration statistic, not the probability of correctness;
+a Score confidence of zero is valid. `output_tokens: 0` is expected for this runtime.
+Matching Jev's core response shape does not establish equivalent judgments or full
+API compatibility; see [Architecture](ARCHITECTURE.md).
+
+### Official SDK example
+
+[`tests/ts/test.ts`](../tests/ts/test.ts) sends a request and prints rounded summaries.
+From the repository root, test either URL without changing the script:
+
+```fish
+cd tests/ts
+npm install
+env LOCAL_JEV_URL=http://127.0.0.1:8399 node test.ts
+env LOCAL_JEV_URL=http://127.0.0.1:8400 node test.ts
+cd ../..
+```
+
+Do not add `--with-jev` for local testing; that option makes live external API calls.
+[`scripts/demo_request.py`](../scripts/demo_request.py) contains another payload,
+but running it loads a model directly rather than calling these HTTP servers.
+
+## Other model and serving options
+
+The commands below are **alternative launches**. Stop an existing process before
+reusing its port, or choose an unused port.
+
+### Available local adapter variants
+
+| Variant | Matching backbone | Adapter path | Intended use |
+|---|---|---|---|
+| SmolLM v1 | `HuggingFaceTB/SmolLM2-135M` | `adapters/smollm2-135m-structured-v1` | Smaller trained baseline |
+| Qwen v1, LR 1e-5 | `Qwen/Qwen3-0.6B` | `adapters/qwen3-0.6b-structured-v1-lr1e-5` | Recommended among tested v1 runs |
+| Qwen v1, LR 5e-5 | `Qwen/Qwen3-0.6B` | `adapters/qwen3-0.6b-structured-v1` | Regression/control run, not the recommended adapter |
+| SmolLM candidate pilot | `HuggingFaceTB/SmolLM2-135M` | `adapters/smollm2-135m-readout-pilot-candidate-v1` | Experimental independent Score levels and wide Choice |
+| SmolLM 3B gold | `mlx-community/SmolLM3-3B-Base-bf16` | `adapters/smollm3-3b` | Historical legacy-v0 model |
+| SmolLM 3B distilled | `mlx-community/SmolLM3-3B-Base-bf16` | `adapters/smollm3-3b-distill` | Historical legacy-v0 distillation experiment |
+
+The letter-readout pilot and four `smollm2-135m-teacher-matched-*` adapters are also
+local experiment controls, not better validated replacements for the selected Qwen.
+A larger backbone is not automatically a better configuration. No structured-v1
+3B adapter has been trained in these experiments. Do not pair an adapter with a
+different backbone merely by changing `--model`.
+
+To try the historical 3B gold adapter:
+
+```fish
+uv run python scripts/serve.py \
+  --model mlx-community/SmolLM3-3B-Base-bf16 \
+  --adapter adapters/smollm3-3b \
+  --port 8401
+```
+
+Use `adapters/smollm3-3b-distill` instead for its distilled counterpart. Legacy
+adapters select legacy rendering automatically, including historical state flattening
+and entropy confidence. Do not force `--renderer structured-v1` on them.
+
+To run an **untuned baseline**, omit `--adapter`:
+
+```fish
+uv run python scripts/serve.py --model Qwen/Qwen3-0.6B --port 8402
+```
+
+### Candidate readout: experimental, not a quality upgrade
+
+```fish
+uv run python scripts/serve.py \
+  --model HuggingFaceTB/SmolLM2-135M \
+  --adapter adapters/smollm2-135m-readout-pilot-candidate-v1 \
+  --port 8401
+```
+
+This adapter selects `candidate-v1` from its metadata. Score descriptions are scored
+independently, then normalized; Choice supports up to 255 options within token/view
+budgets. Each candidate costs a binary evaluation. The pilot scored **0/30** on the
+77-option holdout, with nearly uniform probabilities. Treat it as a research option.
+You cannot switch a letter-trained adapter to candidate readout by adding a flag.
+
+### Optional fitted temperatures
+
+Use `--temperature` to load a fitted probability-scaling artifact:
+
+```fish
+uv run python scripts/serve.py \
+  --model Qwen/Qwen3-0.6B \
+  --adapter adapters/qwen3-0.6b-structured-v1-lr1e-5 \
+  --temperature data/runs/followup-v1/qwen3-temperature.json \
+  --port 8400
+```
+
+The corresponding SmolLM file is `data/runs/followup-v1/smollm2-temperature.json`,
+for `adapters/smollm2-135m-structured-v1`. Both artifacts were fitted with native
+precision, independent execution, microbatch size four, and **no `--calibrate`**.
+
+Temperature scaling improved in-family negative log-likelihood, not every metric
+or unfamiliar rubric. It does not change the most likely label, so it cannot repair
+a wrong yes/no classification at a 0.5 threshold. The weighted-mean Score can change.
+Artifacts must match weights/tokenizer, renderer, readout, precision, execution,
+microbatch size, and contextual correction. Older fixed-size artifacts imply four views.
+
+`--calibrate` is a **different operation**: it divides out content-free question
+priors. It adds work for uncached rubrics, can change selected answers, and is not a
+guaranteed accuracy/calibration improvement. The temperature files above cannot be
+combined with it; a matching artifact would need to be fitted separately.
+
+### Precision and shared-prefix execution
+
+```fish
+uv run python scripts/serve.py \
+  --model Qwen/Qwen3-0.6B \
+  --adapter adapters/qwen3-0.6b-structured-v1-lr1e-5 \
+  --precision float32 --execution-mode shared \
+  --port 8400
+```
+
+This is an experimental performance configuration, not the default recommendation.
+FP32 shared execution reduced measured sibling-dependent drift, used more memory,
+and improved latency on some fixtures but not others. Native and FP16 shared paths
+showed larger drift. Do not attach the native/independent temperature artifact to
+this launch. Validate quality and fit matching calibration before relying on it.
+
+### Configuration reference
+
+```fish
+uv run python scripts/serve.py --help
+```
+
+| Flag | Choices / behavior |
+|---|---|
+| `--model`, `--adapter` | Base model and matching local adapter; omit adapter for an untuned baseline |
+| `--renderer` | `structured-v1` or `legacy-v0`; normally selected from adapter metadata |
+| `--readout` | `letters-v1` or `candidate-v1`; override must match the adapter |
+| `--precision` | `native` (default), `float16`, `float32` |
+| `--execution-mode` | `independent` (default), `shared` |
+| `--temperature` | Path to a matching fitted temperature artifact |
+| `--calibrate` | Optional content-free contextual correction, separate from temperature scaling |
+| `--confidence` | `typesafe-fb52b10` (v1 default) or `entropy-v0` (legacy default); changes confidence, not probabilities |
+| `--port` | Default 8399; use different ports for multiple processes; 0 selects a free port |
+| `--host`, `--allow-remote` | Loopback by default; remote binding requires explicit consent and has no built-in authentication/TLS |
+| `--ready-file` | Write startup metadata, including the selected port, to a fresh file |
 
 ## Default operating envelope
 
-| Resource | Default |
-|---|---:|
-| Concurrent HTTP handlers | 16 |
-| Waiting inference jobs | 8, plus one active job |
-| JSON request body | 262,144 bytes |
-| Header/body read deadline | 10 seconds total, not reset by trickling bytes |
-| Queue + inference deadline | 30 seconds |
-| Questions | 32 |
-| State tokens | 2,048 |
-| Tokens in any rendered prompt | min(4,096, backbone context limit) |
-| Rendered tokens across one request | 1,000,000 |
-| Model views across one request | 512 |
-| Answer width | 26 for letters; up to 255 for candidate readout |
-| Shared-execution microbatch | 4 views |
-| Cached question priors / tokenized prompts | 128 / 64 entries |
-| MLX free-buffer allocator cache reclamation threshold | 512 MiB, process-wide |
+| Resource | Default | Flag |
+|---|---:|---|
+| Concurrent HTTP handlers | 16 | `--max-connections` |
+| Waiting inference jobs | 8, plus one active job | `--queue-capacity` |
+| JSON request body | 262,144 bytes | `--max-body-bytes` |
+| Header/body read deadline | 10 seconds total, not reset by trickling bytes | `--io-timeout` |
+| Queue + inference deadline | 30 seconds | `--request-timeout` |
+| Questions | 32 | `--max-questions` |
+| State tokens | 2,048 | `--max-state-tokens` |
+| Tokens in any rendered prompt | min(4,096, backbone context limit) | `--max-prompt-tokens` |
+| Rendered tokens across one request | 1,000,000 | `--max-request-tokens` |
+| Model views across one request | 512 | `--max-views` |
+| Answer width | 26 for letters; up to 255 for candidate readout | `--max-options` (cannot lift the letter cap) |
+| Shared-execution microbatch | 4 views | `--max-batch-size` (not HTTP concurrency) |
+| Cached question priors | 128 entries | `--max-prior-cache-entries` |
+| Cached tokenized prompts | 64 entries | `--max-token-cache-entries` |
+| MLX free-buffer allocator cache reclamation threshold | 512 MiB, process-wide | `--mlx-cache-limit-mb` |
 
 View/token budgets include uncached content-free correction work. A cold corrected
 request can therefore exceed a budget that a warm request fits. Each scoring stage

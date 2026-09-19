@@ -58,7 +58,9 @@ cd tests/ts && npm install && node test.ts
 
 Add `--adapter adapters/smollm3-3b` to the 3B evaluation/server commands only after
 training or obtaining that matching adapter. Weights and datasets are not bundled
-in git. See [Training](docs/TRAINING.md).
+in git. See [Training](docs/TRAINING.md). For the trained SmolLM and selected Qwen
+adapters, fish-compatible commands, side-by-side servers, and request/output examples,
+use [Serving](docs/SERVING.md).
 
 ## Start a structured-v1 experiment
 
@@ -104,7 +106,7 @@ or overlapping legacy artifacts. See [Data](docs/DATA.md).
 
 - [Overview](docs/OVERVIEW.md) — goals, scope, evidence, and sources
 - [Architecture](docs/ARCHITECTURE.md) — current implementation and compatibility gaps
-- [Serving](docs/SERVING.md) — bounded worker, limits, deadlines, and local deployment
+- [Serving](docs/SERVING.md) — SmolLM/Qwen launch commands, requests, options, and bounded deployment
 - [Experiments](docs/EXPERIMENTS.md) — controlled model/readout/calibration experiments
 - [Data](docs/DATA.md) — external inventory, integrity checks, and split risks
 - [Training](docs/TRAINING.md) — v1 experiments, calibration, and historical v0 recipes

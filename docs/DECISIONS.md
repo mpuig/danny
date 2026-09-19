@@ -21,13 +21,14 @@ shared-state path. This is a practical starting point, not proof that encoders
 cannot do the task. Compare alternatives on relevant workloads rather than inferring
 a hard capacity ceiling from another project's benchmark.
 
-## 3. SmolLM3-3B research baseline; SmolLM2-135M smoke tests
+## 3. Initial SmolLM baselines; later controlled SmolLM/Qwen comparison
 
-These are the implemented backbones used in the recorded experiments. Qwen remains
-a candidate comparison. Base checkpoints were chosen to avoid preference-trained
-output biases, but base models are not automatically calibrated. The former
-"base checkpoints only" rule is superseded: compare instruction-tuned variants
-when their rubric understanding may help.
+The initial experiments used SmolLM3-3B for research and SmolLM2-135M for smoke tests.
+Subsequent structured-v1 training compared SmolLM2-135M and Qwen3-0.6B; selected Qwen
+at LR 1e-5 is now the preferred tested configuration (decision 21). The 3B runs remain
+historical. Base checkpoints are not automatically calibrated, and preference tuning
+is not categorically disqualifying. Compare instruction-tuned variants rather than
+assuming their probability quality.
 
 ## 4. MLX is the primary training and serving backend
 
@@ -42,21 +43,22 @@ Early bare yes/no prompts reportedly showed a 94% yes-bias on SST-2. The recorde
 bare-template result was 0.535 accuracy / 0.297 ECE; the lettered/corrected result
 was 0.695 / 0.088. These settings are not a complete factorial ablation.
 
-The workaround remains in code, but it erases primitive identity. Jev documents
-that Noul and equivalent yes/no Choice probabilities need not agree. Preserve the
-type in the next rendering/training version; a binary softmax is still a valid
-candidate readout and does not require a separate head by itself.
+The workaround remains only in legacy rendering, where it erases primitive identity.
+Jev documents that Noul and equivalent yes/no Choice probabilities need not agree.
+Structured-v1 now preserves the type (decision 20); binary softmax remains the
+readout and does not require a separate head by itself.
 
 ## 6. Letter labels, including Score levels — v0 limitation
 
 An early numeric-label experiment found ` 0` split into multiple tokens on SmolLM2,
 causing collisions when only the first token was read. Letter labels avoid that
-case, but must be checked for every tokenizer. The code's warning/first-token
-fallback is not sufficient validation.
+case, but must be checked for every tokenizer. Strict single-token and collision
+validation now replaces the original warning/first-token fallback.
 
-Choice is capped at 26 options. Score currently presents all levels together;
-Jev's docs describe separate-level evaluation. Compare those formulations rather
-than assuming Choice and Score share the same internals.
+Letter readout remains capped at 26 options and presents Score levels jointly.
+Candidate readout now supports up to 255 options and independent Score descriptions;
+its quality limitations are recorded in decision 21. Neither formulation establishes
+Jev's private implementation.
 
 ## 7. Contextual correction is an optional bias-correction experiment
 
@@ -83,7 +85,8 @@ observations are not a hyperparameter optimum or a universal failure threshold.
 
 ## 10. Hold out datasets, then add true rubric/task-family holdouts
 
-Training tasks are ag_news, dbpedia, imdb, and yelp_stars. SST-2 and tweet_emotion
+The historical recast training tasks are ag_news, dbpedia, imdb, and yelp_stars.
+SST-2 and tweet_emotion
 are excluded by `TRAIN_TASKS`, but SST-2's canonical question and criteria exactly
 match IMDB. Earlier "unseen questions" claims for SST-2 were incorrect.
 
@@ -115,10 +118,11 @@ differences to target type.
 ## 13. Share state computation using token-level common prefixes
 
 The original implementation scored suffixes sequentially and rewound a cache.
-That description is historical: current code tiles prefix KV tensors across batch
-rows and scores suffixes together. Token-level matching avoids string/BPE boundary
-assumptions. Question contexts remain isolated, but cache copying and mixed-template
-prefix mismatches limit reuse.
+That description is historical: the current opt-in shared path tiles prefix KV
+across microbatch rows and scores suffixes together, recomputing the prefix for each
+microbatch. Independent execution is now the default after the drift investigation.
+Token-level matching avoids string/BPE boundary assumptions. Question contexts remain
+isolated, but cache copying and mixed-template prefix mismatches limit reuse.
 
 ## 14. Single-threaded HTTP/1.1 development server (historical)
 
@@ -153,15 +157,16 @@ scaling were subsequently implemented and evaluated (decision 21).
 
 ## 18. Separate completed code, recorded evidence, and unimplemented work
 
-The repository has a prototype engine and scripts plus one SDK smoke test, not
-full compatibility certification. Confidence differs from the published adapter;
-structured serialization, error handling, model identity, and limits need work.
-The distilled adapter and three-way results now exist, so earlier "in flight"
-status was stale. The local Nimble files are 404 bodies; Kev checksums match its
-manifest, but calibration/development files are missing.
+At the initial documentation review, the repository had a prototype and one SDK
+smoke test, not full compatibility certification. Confidence, serialization, error
+handling, model identity, and limits needed changes. Distilled adapters and recorded
+three-way results already existed, so the earlier "in flight" status was stale.
 
-That documentation pass changed no model code, weights, or data. The subsequent
-implementation milestone is recorded separately in decision 20.
+Decisions 20–21 record the subsequent implementation and experiments: v1 now pins
+public confidence formulas, preserves structured JSON, and bounds serving work.
+Local calibration/development partitions were derived from verified Kev training
+files. The missing upstream partitions and invalid Nimble downloads remain distinct
+issues. Full Jev compatibility is still not established.
 
 ## 19. Optimize MLX before committing to a Rust runtime
 

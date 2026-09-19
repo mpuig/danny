@@ -43,8 +43,10 @@ The generated manifest records source hashes, the upstream manifest, filtering,
 split policy/seed, exclusions, output hashes, and per-source/primitive counts.
 Existing output directories are refused. Banking77 and SST-5 questions remain in the
 original files but are excluded from this 26-option preparation. `--max-options 255`
-can preserve wide questions in canonical data, but current renderers cannot train
-or evaluate them.
+can preserve wide questions in canonical data. Training/evaluation above 26 options
+requires `candidate-v1` and matching adapter weights; letter readout remains capped
+at 26. The candidate pilot's near-chance wide-Choice results are documented in
+[Experiments](EXPERIMENTS.md).
 
 This corpus deliberately does **not** mix in the legacy recast/distillation files.
 New unrelated sources, fuzzy duplicates, and backbone pretraining exposure still
@@ -131,7 +133,9 @@ contains 640 distinct rendered states shared across questions and variants.
 
 The current recast train/val files include shuffled options. Historical adapter
 results were recorded as pre-shuffling runs. File names do not prove which data
-version trained an adapter; no complete adapter-to-dataset manifest exists yet.
+version trained an adapter; these historical adapters lack complete adapter-to-dataset
+manifests. New v1 runs record data, backbone/tokenizer, configuration, and implementation
+identities in training manifests.
 
 ### Overlap found
 

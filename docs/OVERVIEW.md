@@ -2,6 +2,12 @@
 
 Reviewed 2026-09-19 against the current code, local data, and the public Jev docs.
 
+Use [Experiments](EXPERIMENTS.md) for current controlled measurements. The 3B tables
+in [Evaluation](EVALUATION.md) and early decision-log entries describe historical
+experiments, not equivalent evidence about today's v1 adapters. SDK smoke tests do
+not establish an exact drop-in replacement, and calibration remains an empirical
+property to test on the intended workload.
+
 ## Goal
 
 Build a small, fine-tuned **System One model** on an existing pretrained backbone
@@ -42,13 +48,17 @@ new evidence or options. Question independence is not statistical independence.
 4. **Efficient local serving.** Establish latency, memory, and throughput limits on
    the actual target hardware. Prefer improving MLX before adding another runtime.
 5. **A reproducible recipe.** Version datasets, rendering, targets, weights, and
-   evaluations. The current scripts do not yet capture all of that provenance.
+   evaluations. Current v1 runs record hashes, revisions, configuration, and environment
+   details. Historical runs have provenance gaps; manifests do not ensure cross-device
+   reproducibility.
 
 ## Scope and limitations
 
-Start with English text and JSON state, narrow semantic judgments, and small
-backbones. SmolLM3-3B is the current research model; SmolLM2-135M checks the pipeline.
-Qwen is a candidate comparison, not an implemented second architecture.
+The current scope is English text and JSON state, narrow semantic judgments, and
+small backbones. SmolLM2-135M and Qwen3-0.6B have completed structured-v1 training and
+evaluation. Qwen at learning rate 1e-5 is the selected development configuration;
+SmolLM is the smaller comparison. SmolLM3-3B adapters are historical legacy-v0 runs,
+not the current controlled baseline. No structured-v1 3B run has been completed.
 
 Non-goals include free-form generation, multimodal inference, exact arithmetic,
 and matching a much larger model's broad knowledge. Jev itself documents weaknesses
