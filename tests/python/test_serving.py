@@ -1,5 +1,11 @@
 import http.client
 import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 import threading
 import time
 import unittest
@@ -235,6 +241,79 @@ class BoundedHTTPTests(unittest.TestCase):
         self.assertEqual(self.post("", {"Content-Length": "-1"})[0], 400)
         self.assertEqual(self.post("", {"Transfer-Encoding": "chunked"})[0], 400)
         self.assertEqual(self.post("{}", {"Content-Type": "text/plain"})[0], 415)
+
+
+@unittest.skipUnless(
+    os.environ.get("JEV_TEST_MODEL"),
+    "set JEV_TEST_MODEL for real server lifecycle test",
+)
+class ModelServerLifecycleTests(unittest.TestCase):
+    def test_background_inherited_sigint_is_replaced_and_shutdown_is_clean(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            ready = Path(tmp) / "ready.json"
+            args = [
+                str(root / "scripts/serve.py"),
+                "--model",
+                os.environ["JEV_TEST_MODEL"],
+                "--port",
+                "0",
+                "--ready-file",
+                str(ready),
+            ]
+            code = (
+                "import signal,runpy,sys;signal.signal(signal.SIGINT,signal.SIG_IGN);"
+                f'sys.argv={args!r};runpy.run_path(sys.argv[0],run_name="__main__")'
+            )
+            with (Path(tmp) / "server.log").open("w") as log:
+                child = subprocess.Popen(
+                    [sys.executable, "-c", code],
+                    cwd=root,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                )
+            try:
+                deadline = time.monotonic() + 120
+                info = None
+                while time.monotonic() < deadline and child.poll() is None:
+                    if ready.exists():
+                        try:
+                            info = json.loads(ready.read_text())
+                            break
+                        except json.JSONDecodeError:
+                            pass
+                    time.sleep(0.05)
+                self.assertIsNotNone(info, (Path(tmp) / "server.log").read_text())
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1", info["port"], timeout=30
+                )
+                connection.request(
+                    "POST",
+                    "/v1/systemone",
+                    body=json.dumps(
+                        {
+                            "state": "Hello",
+                            "questions": {
+                                "q": {
+                                    "type": "noul",
+                                    "instructions": "Is this a greeting?",
+                                }
+                            },
+                        }
+                    ),
+                    headers={"Content-Type": "application/json"},
+                )
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200, response.read())
+                connection.close()
+                child.send_signal(signal.SIGINT)
+                self.assertEqual(
+                    child.wait(timeout=15), 0, (Path(tmp) / "server.log").read_text()
+                )
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.wait()
 
 
 if __name__ == "__main__":

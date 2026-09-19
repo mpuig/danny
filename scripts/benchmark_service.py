@@ -297,13 +297,28 @@ def main():
         }:
             raise RuntimeError("admission probe failed")
     finally:
+        forced = False
         if child.poll() is None:
-            child.send_signal(signal.SIGINT)
+            child.send_signal(signal.SIGTERM)
             try:
                 child.wait(timeout=60)
             except subprocess.TimeoutExpired:
+                forced = True
                 child.kill()
                 child.wait()
+        report["shutdown"] = {"forced": forced, "exit_code": child.returncode}
+        report["validation_pass"] = bool(
+            report.get("complete")
+            and not forced
+            and child.returncode == 0
+            and all(case["parity_pass"] for case in report["cases"])
+            and report.get("admission_probes")
+            == {"body": 413, "questions": 422, "state_tokens": 422}
+            and all("500" not in case["status_counts"] for case in report["cases"])
+        )
+        (args.out_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    if not report["validation_pass"]:
+        raise RuntimeError("benchmark validation/shutdown failed; see report.json")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import signal
 from dataclasses import fields
 from pathlib import Path
 
@@ -42,7 +44,7 @@ def main():
         "--mlx-cache-limit-mb",
         type=int,
         default=512,
-        help="process-wide MLX free-buffer cache cap; not a total RAM limit",
+        help="MLX free-buffer reclamation threshold; not a total RAM limit",
     )
     ap.add_argument("--queue-capacity", type=int, default=8)
     ap.add_argument("--request-timeout", type=float, default=30)
@@ -64,6 +66,24 @@ def main():
         ap.error(
             "remote binding requires --allow-remote; this server has no authentication or TLS"
         )
+    for name in (
+        "max_batch_size",
+        "queue_capacity",
+        "max_body_bytes",
+        "max_connections",
+    ):
+        if getattr(args, name) < 1:
+            ap.error(f"{name} must be positive")
+    for name in ("request_timeout", "io_timeout"):
+        value = getattr(args, name)
+        if not math.isfinite(value) or value <= 0:
+            ap.error(f"{name} must be finite and positive")
+    if args.mlx_cache_limit_mb < 0 or not 0 <= args.port <= 65535:
+        ap.error("invalid allocator cache limit or port")
+    # Background shells can pass SIGINT=SIG_IGN through subprocesses. Install
+    # explicit handlers instead of silently ignoring benchmark/operator shutdown.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     limits = EngineLimits(
         **{field.name: getattr(args, field.name) for field in fields(EngineLimits)}
     )
