@@ -13,17 +13,20 @@ workflow logic; the model supplies semantic judgments and useful uncertainty.
 ## Current status
 
 The repository contains a **Python/Apple MLX research prototype**, not a
-production-ready decision service. It implements restricted-token readout, LoRA training, Jev
-soft-target collection, evaluation scripts, and a development HTTP server.
+production-ready decision service. It implements versioned readouts, LoRA training,
+matched experiments, fitted temperatures, and a bounded local HTTP service.
 
-- SmolLM3-3B is the current research backbone; SmolLM2-135M is a smoke-test model.
+- Actual structured-v1 SmolLM2-135M and Qwen3-0.6B training runs are complete;
+  historical SmolLM3-3B results remain separately labeled.
 - The API supports the basic Jev request/answer shapes and has a TypeScript SDK
   smoke test. **Full behavioral and API compatibility is not established.**
 - Calibration and unfamiliar-rubric generalization are research goals, not guarantees.
 - `structured-v1` rendering preserves JSON and primitive identity. Historical
   adapters automatically use `legacy-v0`; incompatible overrides are rejected.
-- Canonical Kev data preparation, split checks, external evaluation, and Python
-  tests are implemented. Specialized heads and a bounded MLX service remain planned.
+- Canonical data, split/provenance checks, grouped comparisons, independent Score
+  levels, and up-to-255-option candidate readout are implemented and tested.
+- The local service has bounded admission/caches, deadlines, model discovery, and
+  a model-owning worker. See [Serving](docs/SERVING.md) for limits and caveats.
 - Portable export and a Rust runtime are later, evidence-gated options.
 
 See [Architecture](docs/ARCHITECTURE.md) for current behavior and compatibility gaps,
@@ -93,7 +96,9 @@ or overlapping legacy artifacts. See [Data](docs/DATA.md).
 ## Documentation
 
 - [Overview](docs/OVERVIEW.md) — goals, scope, evidence, and sources
-- [Architecture](docs/ARCHITECTURE.md) — current implementation and target MLX service
+- [Architecture](docs/ARCHITECTURE.md) — current implementation and compatibility gaps
+- [Serving](docs/SERVING.md) — bounded worker, limits, deadlines, and local deployment
+- [Experiments](docs/EXPERIMENTS.md) — controlled model/readout/calibration experiments
 - [Data](docs/DATA.md) — external inventory, integrity checks, and split risks
 - [Training](docs/TRAINING.md) — executable v0 recipe and its limitations
 - [Evaluation](docs/EVALUATION.md) — metrics, commands, historical results, and required tests

@@ -3,6 +3,7 @@ import importlib.util
 import json
 import threading
 import unittest
+from types import SimpleNamespace
 from http.server import HTTPServer
 
 from jev.rendering import LEGACY_V0, STRUCTURED_V1
@@ -21,6 +22,7 @@ class ServerTests(unittest.TestCase):
         self.engine.model_name = "local-test-model"
         self.engine.contextual_calibration = False
         self.engine._input_tokens = 0
+        self.engine.tokenizer = SimpleNamespace(encode=lambda text: list(range(len(text))))
         self.prompts = []
         def score(items):
             self.prompts.extend(prompt for prompt, _ in items)

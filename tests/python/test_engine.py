@@ -28,6 +28,7 @@ class EngineContractTests(unittest.TestCase):
         engine._input_tokens = 0
         engine._label_cache = {}
         engine._prior_cache = {}
+        engine.tokenizer = SimpleNamespace(encode=lambda text: list(range(len(text))))
         return engine
 
     def test_question_ids_do_not_enter_prompts_or_model_identity(self):
@@ -63,7 +64,7 @@ class EngineContractTests(unittest.TestCase):
                     'backbone_files':{},'adapter_sha256':None},
                 'fits':{'noul':{'temperature':2.0}}}
             path.write_text(json.dumps(artifact))
-            with patch('jev.engine.load', return_value=(SimpleNamespace(eval=lambda: None), None)), \
+            with patch('jev.engine.load', return_value=(SimpleNamespace(eval=lambda: None), SimpleNamespace(encode=lambda text: list(range(len(text)))), {})), \
                  patch('jev.engine.model_identity', return_value={'files':{}}):
                 engine = SystemOneEngine('fixture',temperature_path=str(path))
                 engine._score_batch = lambda items: [[.1,.9] for _ in items]

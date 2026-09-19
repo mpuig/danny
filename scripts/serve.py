@@ -1,92 +1,119 @@
-"""Jev-shaped development endpoint: POST /v1/systemone.
+"""Bounded local MLX service: POST /v1/systemone, GET /v1/models, /health, /metrics.
 
-Use a base-URL override (TYPESAFE_BASE_URL / baseURL) for local SDK smoke tests.
-This is a tested subset, not complete Jev API compatibility or a hardened service.
-
-    uv run python scripts/serve.py --model HuggingFaceTB/SmolLM2-135M \
-        --adapter adapters/smollm2-135m --calibrate --port 8399
+A single dedicated thread loads/owns the model; bounded HTTP handlers enqueue work.
+No authentication/TLS: stay on loopback or explicitly accept remote exposure risk.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from dataclasses import fields
+from pathlib import Path
 
-from jev.engine import SystemOneEngine
 from jev.confidence import SCHEMES
-from jev.rendering import LEGACY_V0, RENDERER_VERSIONS, READOUT_VERSIONS
-from jev.serialization import loads, validate_state
+from jev.engine import SystemOneEngine
+from jev.limits import EngineLimits
+from jev.rendering import RENDERER_VERSIONS, READOUT_VERSIONS
+from jev.serving import BoundedHTTPServer, InferenceWorker, make_handler, flatten_state  # noqa: F401 (compatibility exports)
 
 
-def flatten_state(state) -> str:
-    """Historical v0 HTTP conversion only; structured-v1 must not use this."""
-    if isinstance(state, str):
-        return state
-    if isinstance(state, dict):
-        return "\n".join(f"{k}: {v}" for k, v in state.items())
-    return str(state)
-
-
-def make_handler(engine: SystemOneEngine):
-    class Handler(BaseHTTPRequestHandler):
-        protocol_version = "HTTP/1.1"  # Used by the SDK integration tests.
-
-        def do_POST(self):
-            if self.path.rstrip("/") != "/v1/systemone":
-                return self._send(404, {"error": {"message": "not found"}})
-            try:
-                body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-                request = loads(body)
-                if isinstance(request, dict) and "state" in request:
-                    validate_state(request["state"])
-                # Preserve the historical server serialization ONLY for old
-                # adapters. structured-v1 receives the original JSON unchanged.
-                if engine.renderer_version == LEGACY_V0 and isinstance(request, dict) and "state" in request:
-                    request["state"] = flatten_state(request["state"])
-                response = engine.respond(request)
-                self._send(200, response)
-            except (KeyError, TypeError, ValueError) as e:
-                self._send(422, {"error": {"message": str(e)}})
-
-        def _send(self, code: int, payload: dict):
-            data = json.dumps(payload).encode()
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-
-        def log_message(self, fmt, *fmt_args):  # quiet request logging
-            print(f"{self.command} {self.path} -> {fmt % fmt_args}")
-
-    return Handler
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", required=True)
-    ap.add_argument("--adapter", default=None)
-    ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
+    ap.add_argument("--adapter")
+    ap.add_argument("--renderer", choices=RENDERER_VERSIONS)
     ap.add_argument("--readout", choices=READOUT_VERSIONS)
     ap.add_argument("--temperature")
     ap.add_argument("--confidence", choices=SCHEMES)
-    ap.add_argument("--calibrate", action="store_true")
-    ap.add_argument("--precision", choices=["native", "float16", "float32"], default="native")
-    ap.add_argument("--execution-mode", choices=["independent", "shared"], default="independent")
+    ap.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="content-free contextual correction, separate from temperature fitting",
+    )
+    ap.add_argument(
+        "--precision", choices=["native", "float16", "float32"], default="native"
+    )
+    ap.add_argument(
+        "--execution-mode", choices=["independent", "shared"], default="independent"
+    )
+    ap.add_argument("--max-batch-size", type=int, default=4)
+    ap.add_argument(
+        "--mlx-cache-limit-mb",
+        type=int,
+        default=512,
+        help="process-wide MLX free-buffer cache cap; not a total RAM limit",
+    )
+    ap.add_argument("--queue-capacity", type=int, default=8)
+    ap.add_argument("--request-timeout", type=float, default=30)
+    ap.add_argument("--io-timeout", type=float, default=10)
+    ap.add_argument("--max-body-bytes", type=int, default=262144)
+    ap.add_argument("--max-connections", type=int, default=16)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8399)
-    args = ap.parse_args()
-
-    engine = SystemOneEngine(
-        args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter,
-        renderer_version=args.renderer, precision=args.precision, execution_mode=args.execution_mode,
-        readout_version=args.readout, temperature_path=args.temperature, confidence_scheme=args.confidence,
+    ap.add_argument("--allow-remote", action="store_true")
+    ap.add_argument(
+        "--ready-file", type=Path, help="write startup metadata to a fresh file"
     )
-    # Retain the tested single-thread path until a controlled worker is added.
-    server = HTTPServer((args.host, args.port), make_handler(engine))
-    print(f"jev-shaped development server on http://{args.host}:{args.port}/v1/systemone")
-    server.serve_forever()
+    for field in fields(EngineLimits):
+        ap.add_argument(
+            "--" + field.name.replace("_", "-"), type=int, default=field.default
+        )
+    args = ap.parse_args()
+    if args.host not in ("127.0.0.1", "localhost") and not args.allow_remote:
+        ap.error(
+            "remote binding requires --allow-remote; this server has no authentication or TLS"
+        )
+    limits = EngineLimits(
+        **{field.name: getattr(args, field.name) for field in fields(EngineLimits)}
+    )
+
+    def factory():
+        return SystemOneEngine(
+            args.model,
+            adapter_path=args.adapter,
+            contextual_calibration=args.calibrate,
+            renderer_version=args.renderer,
+            readout_version=args.readout,
+            precision=args.precision,
+            execution_mode=args.execution_mode,
+            max_batch_size=args.max_batch_size,
+            limits=limits,
+            temperature_path=args.temperature,
+            confidence_scheme=args.confidence,
+            mlx_cache_limit_bytes=args.mlx_cache_limit_mb * 1024 * 1024,
+        )
+
+    worker = InferenceWorker(
+        factory, capacity=args.queue_capacity, timeout=args.request_timeout
+    )
+    server = None
+    try:
+        server = BoundedHTTPServer(
+            (args.host, args.port),
+            make_handler(
+                worker, max_body_bytes=args.max_body_bytes, io_timeout=args.io_timeout
+            ),
+            max_connections=args.max_connections,
+        )
+        ready = {
+            "ready": True,
+            "host": server.server_address[0],
+            "port": server.server_address[1],
+            "model": worker.describe(),
+        }
+        if args.ready_file is not None:
+            args.ready_file.parent.mkdir(parents=True, exist_ok=True)
+            with args.ready_file.open("x") as handle:
+                json.dump(ready, handle)
+        print(json.dumps(ready), flush=True)
+        server.serve_forever(poll_interval=0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if server is not None:
+            server.server_close()
+        worker.close()
 
 
 if __name__ == "__main__":
