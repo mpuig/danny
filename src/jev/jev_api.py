@@ -25,12 +25,19 @@ def api_key() -> str:
     raise SystemExit("TYPESAFE_API_KEY not found in environment or .env")
 
 
-def ask_jev(key: str, state: str, question) -> dict:
-    """One question against jev-latest; returns the answer dict. Retries with
-    exponential backoff on transient HTTP errors and socket timeouts."""
+def ask_jev(key: str, state, question, model: str = "jev-latest") -> dict:
+    """One question; returns the answer dict. Retries with exponential backoff
+    on transient HTTP errors and socket timeouts."""
+    return systemone(key, state, question, model)["answers"]["q"]
+
+
+def systemone(key: str, state, question, model: str = "jev-latest") -> dict:
+    """Full response (answers, reported model id, usage) for one question.
+    Pin a versioned `model` (e.g. jev-1.13.0) for reproducible collection;
+    the response's own `model` field reports what actually served it."""
     payload = {
         "state": state,
-        "model": "jev-latest",
+        "model": model,
         "questions": {
             "q": {
                 "type": question.type,
@@ -48,7 +55,7 @@ def ask_jev(key: str, state: str, question) -> dict:
     for attempt in range(5):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
-                return json.loads(resp.read())["answers"]["q"]
+                return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             if e.code in RETRYABLE and attempt < 4:
                 time.sleep(2**attempt)
