@@ -1,100 +1,168 @@
-# How to Train
+# Training the current MLX prototype
 
-## 0. Setup
+This is the **v0 recipe that exists today**, not the full model/data plan. Read
+[Data](DATA.md) before mixing sources, and [Roadmap](ROADMAP.md) before changing
+rendering or primitive semantics. Those changes require new rendered data and
+retraining; old adapters are not evidence of performance on the new format.
+
+## 1. Setup
 
 ```bash
-uv sync                     # installs mlx-lm, datasets, numpy, tqdm
+uv sync
 ```
-Models download from Hugging Face on first use. For Jev distillation, put
-`TYPESAFE_API_KEY=...` in `.env` at the repo root (gitignored).
 
-## 1. Build training data (gold labels, one-hot)
+MLX is the primary backend for both training and serving on Apple Silicon. Models
+download from Hugging Face on first use. Only live Jev collection requires
+`TYPESAFE_API_KEY` in the environment or the repository's `.env` file.
+
+## 2. Build recast gold-label data
 
 ```bash
 uv run python scripts/build_data.py --per-task 2000 --val-per-task 200
-# -> data/train.jsonl (8000 rows), data/val.jsonl (800 rows)
+# Writes data/train.jsonl (8,000 rows) and data/val.jsonl (800 rows).
 ```
 
-Recasts the train splits of the four training tasks (ag_news, dbpedia, imdb, yelp_stars —
-see `src/jev/recast.py`) into rows of `{prompt, labels, target, task}`. The prompt is
-rendered with the *same templates the engine uses at inference*. Augmentation (decision
-log #12): instruction phrasings cycle per example; choice/noul option order is shuffled
-with the target remapped; ~20% of choice examples drop option descriptions. Score levels
-are ordered and never shuffled. States are capped at 1500 chars.
+This command **overwrites** those files. Use `--out-dir data/recast-v0` to preserve
+existing artifacts, then pass the resulting paths explicitly to the trainer.
 
-## 2. Pull soft targets from Jev (optional, recommended)
+The four source tasks are ag_news, dbpedia, imdb, and yelp_stars. The builder draws
+from source training splits, cycles three phrasings per task, and partitions the
+selected rows into train/validation. The row format is:
+
+```json
+{"prompt": "...", "labels": [" A", " B"], "target": [0.0, 1.0], "task": "imdb"}
+```
+
+Current augmentation:
+
+- Choice and Noul option order is shuffled, with targets remapped.
+- Roughly 20% of Choice examples drop descriptions.
+- Score levels remain ordered.
+- Validation rows are rendered with augmentation too, not only canonical wording.
+
+States are truncated to **1,500 characters** while keeping the original labels.
+That can remove decisive evidence. The trainer separately skips prompts longer
+than `--max-seq` (default 768 tokens). Neither operation is an evidence-preserving
+truncation policy; report exclusions and revise this for the next data pipeline.
+
+The builder does not pin source revisions or preserve source IDs. A distinct seed
+is not a global split guarantee when other datasets are added.
+
+## 3. External Kev data
+
+The existing converter accepts the downloaded Kev request-shaped rows:
+
+```bash
+uv run python scripts/convert_kev.py data/external/kev_pp4_train.jsonl \
+    --out data/kev_train.jsonl
+uv run python scripts/convert_kev.py data/external/kev_pp4_test.jsonl \
+    --out data/kev_test.jsonl
+```
+
+These overwrite converted outputs. With the audited files, they yield 11,000 and
+1,048 question rows. SST-5 and choices above 26 options are skipped. The converted
+rows are compatible with the trainer's input format, but lack source/group metadata,
+option-shuffling augmentation, and deliberate structured-state serialization.
+
+**Do not use `kev_test.jsonl` as training, validation, or temperature-fitting data.**
+Do not combine Kev training with the current recast validation: four exact states
+overlap. Kev calibration/development files are listed by its manifest but absent
+locally. Both local Nimble files are invalid downloads, not usable JSONL.
+See [Data](DATA.md) for the inventory and checks.
+
+## 4. Collect Jev soft targets (optional experiment)
 
 ```bash
 uv run python scripts/distill_from_jev.py --per-task 500 --out data/distill_train.jsonl
-# resumable after interruptions:
+# Resume only with the same seed, configuration, and dataset ordering:
 uv run python scripts/distill_from_jev.py --per-task 500 --out data/distill_train.jsonl --resume
 ```
 
-Same JSONL format, but `target` is Jev's probability distribution (noul → `[1−p, p]`;
-choice/score reordered to our option order). Jev's raw answer is kept under `"jev"` and
-the gold label under `"gold_label"` for agreement analysis. Uses a seed distinct from
-build_data so the sets differ. ~1.5 requests/s observed.
+This calls a paid external API. Check terms before using resulting data or weights
+beyond experimentation. Without `--resume`, it overwrites the output file.
 
-## 2b. External data: kev's frozen datasets (optional)
+The collector stores the teacher distribution as `target`, the original label as
+`gold_label`, and the answer as `jev`. Noul targets become `[1-p_yes, p_yes]`;
+Choice and Score targets are reordered to the local labels. It does not apply the
+gold builder's option shuffling or description dropout.
 
-kev commits checksummed, Jev-shaped datasets in-repo (`evals/public-pool-v4` and
-`decision-v1/v2` with train/calibration/dev/test splits). Convert with:
+Current limitations:
+
+- `jev-latest` is hard-coded, and the actual response model version is not stored.
+- Resume uses per-task row counts, not record IDs; configuration changes are unsafe.
+- Targets are not validated/normalized. Four existing rows sum to 0.99.
+- Six existing teacher-training states occur in `data/val.jsonl`.
+- Source IDs and a disjoint teacher validation partition are missing.
+
+The historical distilled adapter used `data/val.jsonl`, so that validation loss is
+not strictly held out. Before another distillation run, prepare group-disjoint
+training/development/calibration data and normalized targets. Then pass the
+appropriate files through `--train` and `--val`; the current trainer does not
+perform those safety checks for you.
+
+For a causal comparison, use the **same examples, augmentation, step budget, and
+splits** for gold, teacher-argmax, teacher-soft, and mixed-target runs. The existing
+8,000-row gold corpus versus 2,000-row soft corpus does not isolate soft-target value.
+
+## 5. Train LoRA
+
+Example for the recast-only v0 baseline, using a fresh adapter directory:
 
 ```bash
-uv run python scripts/convert_kev.py data/external/kev_pp4_train.jsonl --out data/kev_train.jsonl
+uv run python scripts/train_lora.py --model mlx-community/SmolLM3-3B-Base-bf16 \
+    --train data/train.jsonl --val data/val.jsonl \
+    --out adapters/smollm3-3b-recast-v0 --batch-size 4 --max-steps 800 --lr 1e-5
 ```
 
-The converter **excludes sst5** (shares SST sentences with our held-out sst2 —
-contamination) and skips >26-option questions (banking77; needs the v1 reserved-token
-tier). Yield: 11,000 questions over 10 sources incl. BoolQ (reading comprehension) and
-MNLI (reasoning) — dimensions our own recast set lacks. Nimble publishes only its
-curation *pipeline* + hashes, not data; jeff has none.
+The loss is cross-entropy over **label-token logits only**, at each prompt's last
+position, against a one-hot or soft target. It matches the raw inference readout,
+not the optional contextual correction. Proper scoring rules encourage honest
+probabilities in expectation under suitable assumptions; they do not guarantee
+calibration under finite data, teacher errors, limited capacity, or task shift.
+This is supervised fine-tuning, not a claimed reproduction of private RLCD.
 
-## 3. Train LoRA
+Batches are length-sorted, then shuffled by batch. Right padding is safe for the
+causal readout. Masks support different option counts. Unlike the optimized batched
+inference path, training currently computes the full sequence vocabulary logits.
 
-```bash
-# gold one-hot:
-uv run python scripts/train_lora.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --out adapters/smollm3-3b --batch-size 4 --max-steps 800 --lr 1e-5
+### Historical settings, not universal optima
 
-# Jev soft targets:
-uv run python scripts/train_lora.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --train data/distill_train.jsonl --val data/val.jsonl \
-    --out adapters/smollm3-3b-distill --batch-size 4 --epochs 2 --lr 1e-5
-```
-
-The loss is CE between the target distribution and the softmax over the **label tokens
-only** at each prompt's last position — identical to the inference readout, soft-target
-capable (decision log #8). Batches are length-sorted (less padding), right-padded (safe
-under causal attention; logits taken at each row's true last token), mixed option counts
-handled with label masking.
-
-**Hyperparameters that matter:**
-
-| | 135M | 3B |
+| Setting | 135M smoke model | 3B research model |
 |---|---|---|
-| learning rate | 1e-4 OK | **1e-5** (1e-4 is destructive — see decision #9) |
-| batch size | 8 | 4 (36 GB machine) |
-| throughput | ~2.7 it/s | ~0.6 it/s |
-| LoRA | rank 16, scale 20, q/k/v/o projections, all layers | same |
+| Learning rate | 1e-4 | 1e-5 |
+| Batch size | 8 | 4 on the 36 GB development machine |
+| Reported throughput | ~2.7 iterations/s | ~0.6 iterations/s |
+| LoRA | Rank 16, scale 20, q/k/v/o attention projections, all layers | Same |
 
-Adapters save in mlx-lm's standard format (`adapters.safetensors` + `adapter_config.json`)
-and load anywhere via `--adapter` / `SystemOneEngine(..., adapter_path=...)`.
+One 3B run at 1e-4 worsened validation loss; that does not prove the rate is always
+destructive. Recorded losses were 0.856 → 0.349 for 3B at 1e-5 / 800 steps, and
+0.856 → 1.59 at 1e-4. A 135M run reported 1.99 → 1.03. These are historical notes,
+not results rerun in the documentation audit.
 
-**Operational cautions:** one 3B training run takes 25–45 min; don't overlap heavy GPU
-jobs — an earlier run was killed by the harness under system memory pressure at step
-800/1000, losing the unsaved adapter. Consider periodic checkpointing if runs get longer.
+`--max-steps` limits optimizer steps, not dataset size. With batch size 4, 800 steps
+process at most 3,200 example presentations, even when the corpus contains 8,000
+rows. Record actual exposure counts when comparing experiments.
 
-## 4. Reference val losses (sanity anchors)
+### Operational and reproducibility limits
 
-- 135M, one-hot, lr 1e-4, 400 steps: val 1.99 → 1.03
-- 3B, one-hot, lr 1e-5, 800 steps: val 0.856 → **0.349**
-- 3B, lr 1e-4 (destructive): val 0.856 → 1.59
+Adapters use mlx-lm's `adapters.safetensors` and `adapter_config.json` format.
+Saving happens only at the end; there is no optimizer checkpoint/resume support.
+Do not overlap heavy training jobs on a memory-limited machine. Earlier 3B runs
+were reported to take 25–45 minutes, with one interrupted before saving.
 
-## 5. Serving a trained model
+The CLI seed controls Python batch order, not explicit MLX initialization seeding.
+Adapter metadata does not record complete arguments, data hashes, tokenizer or
+renderer versions. Label tokenization silently takes the first token in training.
+Fail-fast label checks, deterministic seeds, full manifests, and periodic checkpoints
+are required before treating the recipe as reproducible.
+
+## 6. Serve the adapter
 
 ```bash
 uv run python scripts/serve.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --adapter adapters/smollm3-3b --calibrate --port 8399
+    --adapter adapters/smollm3-3b-recast-v0 --port 8399
 ```
-Then point any Typesafe SDK at it: `TYPESAFE_BASE_URL=http://127.0.0.1:8399`.
+
+Add `--calibrate` only as an explicitly evaluated contextual-correction variant.
+The server is still a development HTTP implementation; see
+[Architecture](ARCHITECTURE.md) for its compatibility and serving limits.

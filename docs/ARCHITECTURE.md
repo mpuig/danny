@@ -1,91 +1,178 @@
-# Architecture & Design
+# Architecture and compatibility
 
-## Core idea: readout, not generation
+This page separates **current code**, **Jev's documented behavior**, and **planned
+changes**. Reviewed 2026-09-19. MLX remains the primary training and serving backend.
 
-Every Jev primitive is a distribution over a small, request-defined label set. A decoder
-LLM computes exactly that at each position — the next-token logits. So:
+## Current model: restricted-token readout
 
-1. Render the question as a completion-style prompt ending just before the answer.
-2. One forward pass; take the logits at the final position.
-3. Softmax restricted to the label tokens (` A`, ` B`, …) → the answer distribution.
+`src/jev/engine.py` loads an MLX language model, optionally with a LoRA adapter.
+For each question it renders a prompt, reads final-position logits for ` A` through
+` Z`, and applies softmax over those labels only. Application code serializes the
+answer. There is no autoregressive answer generation.
 
-No autoregression, no sampling, no parsing. Any answer is "answer-shaped" by construction,
-and every question in a request gets an answer.
+This is a decision-model approximation, not a recovered implementation of Jev.
+A vocabulary projection restricted to label rows already acts as a classifier head;
+a separate head is an experiment, not automatically an improvement.
 
-## Data flow (`src/jev/engine.py`)
-
-```
-respond(request)                        # Jev-shaped dict in/out (+ usage tokens)
+```text
+respond(request)
   └─ ask(state, questions)
-       ├─ _render(state, q)             # prompt + label list per question
-       ├─ _score_batch(items)           # shared-prefix KV cache scoring
-       ├─ _apply_calibration(q, probs)  # optional contextual calibration
-       └─ _to_answer(q, probs)          # ChoiceAnswer / ScoreAnswer / NoulAnswer
+       ├─ _render(state, question)
+       ├─ _score_batch(prompts)
+       ├─ _apply_calibration(question, probabilities)  # optional bias correction
+       └─ _to_answer(question, probabilities)
 ```
 
-### Prompt templates
+### Primitive rendering
 
-- **choice**: header + `State:` + question + lettered options (`A. name: description`)
-  + `The best option is` → read ` A`, ` B`, …
-- **score**: same shape with lettered *level descriptions*; the response maps letters back
-  to level numbers. `score` = probability-weighted mean over levels (hence fractional).
-- **noul**: rendered **through the choice template** as `A. no / B. yes` (see
-  DECISIONS.md #5 — bare yes/no completion has a severe acquiescence bias). Internal
-  distribution order is `[p_no, p_yes]`; the answer is `probs[1]`.
+| Primitive | Current computation | Important limitation |
+|---|---|---|
+| Choice | Whole list of named/described options; letter-token softmax | 26-option cap; position and label-token bias |
+| Noul | Converted to Choice with `A=no`, `B=yes`; return `p_yes` | Original primitive identity is absent from the model prompt |
+| Score | Whole list of lettered level descriptions; categorical softmax | Levels interact in one prompt, unlike the separate-level behavior described by Jev |
 
-### Parallel question scoring (shared state, one batched pass)
+Score uses zero-based level indices: `score = sum(i * p_i)`. This expectation is
+not an exact numeric measurement or a separate regression prediction.
 
-Multi-question requests share the state. `_score_batch` tokenizes all prompts, finds the
-longest **token-level** common prefix (≥ 8 tokens to bother; token-level matching avoids
-BPE boundary bugs), runs it once into a KV cache, tiles that cache across the batch
-dimension, and scores **all question suffixes in a single batched forward pass** —
-reading the LM head only at each row's readout position (materializing the full
-`(n, len, vocab)` logits tensor was the dominant cost). Each row's context is exactly
-prefix + its own suffix, so questions stay strictly independent (the property Jev
-guarantees and jeff trades away) and answers are bit-identical to sequential scoring.
+**Noul identity:** a Noul and corresponding no/yes Choice can produce identical
+prompts here. Jev's [limitations page](https://docs.typesafe.ai/model-jaggedness/jev-1.13)
+explicitly says their probabilities need not match. Teacher targets that differ
+by primitive cannot be learned from identical inputs. Preserve a type marker or
+distinct template before extending cross-primitive distillation.
 
-Measured (SmolLM2-135M, M-series, under concurrent training load): 50 questions 0.29 s,
-**100 questions 0.30 s** — near-flat, matching the flat-latency behavior probed on the
-real Jev. Residual slope at 200+ questions: Python tokenization and the KV-replication
-tax; both disappear in the v2 packed design.
+**Score semantics:** the [Score docs](https://docs.typesafe.ai/primitives/score)
+say each level is evaluated separately, without its number or neighboring levels.
+Our joint-level readout differs. Compare it with a per-level scorer; the docs do
+not disclose Jev's exact scoring, normalization, or attention implementation.
 
-### Contextual calibration (Zhao et al. 2021)
+### Structured input is not yet implemented deliberately
 
-`contextual_calibration=True` estimates the model's label prior per question as its mean
-answer distribution over content-free states (`"N/A"`, `""`, `"none"`), then divides the
-prior out and renormalizes. Priors are cached per question. Measured effect: ag_news
-0.75 → 0.80 acc, Brier 0.40 → 0.31 with zero training.
+The schema annotates instructions as strings. Non-string instructions and
+criterion values can pass through at runtime, but f-strings render them using
+Python representations. The server turns object state into `key: value` lines;
+other non-string state uses `str(state)`.
+
+This conversion is ambiguous. These distinct states both become `a: x\nb: y`:
+
+```python
+{"a": "x\nb: y"}
+{"a": "x", "b": "y"}
+```
+
+A shared, versioned serializer is needed across training, evaluation, and serving.
+It must preserve strings, nested fields, arrays, nulls, and option order. This is
+important for instructions referring to paths such as `ticket.messages[0].text`.
+Serialization alone does not make state immune to prompt injection.
+
+## Current inference execution
+
+`_score_batch` tokenizes every complete prompt, finds their longest common token
+prefix, and uses caching when that prefix has at least eight tokens.
+
+1. Encode the common prefix once into a KV cache.
+2. **Physically repeat** each layer's cached keys and values across batch rows.
+3. Right-pad the suffixes and process them together.
+4. Apply the output head only to each row's last real hidden state.
+
+With causal attention, those readout positions do not see later padding. Each
+row sees the prefix and its own suffix, not another question. This provides the
+intended information boundary, but numerical parity needs regression tests with
+an explicit tolerance; bit-identical outputs are not a general guarantee.
+
+Limitations:
+
+- Cache memory scales with question count because the prefix is copied.
+- Complete prompts are still tokenized separately.
+- Choice/Noul and Score have different text before the state, so mixed requests
+  can lose state-prefix sharing and fall back to sequential full-prompt scoring.
+- New questions require three extra content-free evaluations when correction is on.
+- There is no request-size bound, microbatch policy, or bounded prior cache.
+- The `AttributeError` fallback may reuse an already-mutated cache if failure
+  occurs after the optimized forward begins. It needs a safe capability check or
+  fresh cache rather than a broad retry around mutable state.
+
+Historical timing: 50 questions in 0.29 s and 100 in 0.30 s on SmolLM2-135M under
+concurrent training load. This is not a controlled 3B benchmark or evidence that
+100 questions cost the same as one. Packed attention is a possible optimization;
+it does not automatically remove tokenization or question-to-state attention cost.
+
+## Probabilities, correction, and confidence
+
+### Contextual correction (`--calibrate`)
+
+For each question, average distributions on `"N/A"`, `""`, and `"none"`, then:
+
+```text
+adjusted_i = p_i / max(prior_i, 1e-9)
+output_i = adjusted_i / sum(adjusted)
+```
+
+This is contextual label-bias correction, commonly called contextual calibration.
+It can help or hurt outcome calibration and can remove meaningful prior information.
+Priors are cached by question; new rubrics incur additional work.
+
+Training CE matches the **raw** label readout, not the corrected distribution.
+Evaluate raw and corrected predictions separately. Temperature scaling on a disjoint
+calibration partition is planned, not implemented.
 
 ### Confidence
 
-`1 − normalized entropy` of the distribution (choice/score only, matching Jev's API).
-Pure post-processing.
+Current Choice and Score confidence is `1 - normalized_entropy(probabilities)`.
+It measures concentration, not the probability that an answer is correct.
 
-## Serving (`scripts/serve.py`)
+This differs from the published
+[TypeSafe adapter at revision fb52b103](https://github.com/typesafe-ai/system-one-adapter-python/blob/fb52b1030b7fc1f4f1cf39910afa5da54f9835e3/src/system_one_adapter/_utils/confidence_metrics.py):
 
-`POST /v1/systemone`, same wire format as `api.typesafe.ai`, so official SDKs work via
-`baseURL` / `TYPESAFE_BASE_URL` override. Implementation constraints discovered:
+- Choice uses `(p_max - 1/K) / (1 - 1/K)`, with a one-option special case.
+- Score uses distance from the modal level relative to a uniform reference.
 
-- **Single-threaded** `HTTPServer`: MLX ops must run on the thread that owns the stream
-  (`ThreadingHTTPServer` handler threads crash with `There is no Stream(cpu, 0)`).
-- **`protocol_version = "HTTP/1.1"`**: Node's fetch (undici) rejects HTTP/1.0 responses.
-- **Object states**: the JS SDK sends `state` as an object (`{document: "..."}`); the
-  server flattens it to `key: value` lines.
+The [confidence docs](https://docs.typesafe.ai/confidence) describe a derived
+statistic but do not specify an exact versioned formula. Align with a pinned
+reference and verify live responses, accounting for rounding, before claiming
+semantic compatibility. Do not transfer thresholds across definitions or primitives.
 
-This is a dev server; production serving would want a worker-queue design.
+## API compatibility: current subset
 
-## Schema (`src/jev/schema.py`)
+| Contract | Current repository |
+|---|---|
+| `POST /v1/systemone`, answers keyed by question ID | Implemented for basic requests; IDs stay out of prompts |
+| String/object/array state; structured instructions and criteria | Accepted unevenly; serialization and annotations need correction |
+| Choice up to 255 options | 1–26 supported |
+| Score with 2–10 levels and weighted mean | Implemented, with different model-side level handling |
+| Noul probability, no separate confidence | Response shape implemented |
+| Choice/Score confidence semantics | Different from the published adapter |
+| Response identifies the actual model version | Echoes request `model`, or uses the loaded backbone name |
+| Validation failure uses HTTP 422 | Selected exceptions return HTTP 400; validation is incomplete |
+| `GET /v1/models` | Not implemented |
+| Context limits and usage | No enforced token budget; local execution counters are not Jev billing semantics |
 
-Dataclasses mirroring the Jev API. `Question` validates type, choice ≤ 26 options (v0
-letter-label limit), score 2–10 levels. Answers serialize with `asdict` into the Jev
-response shape.
+Jev 1.13's [model page](https://docs.typesafe.ai/models) specifies 64k total request
+tokens and 32k for state plus the longest question. These are Jev's limits, not
+limits established for our model or hardware. Some introductory docs round the
+budget differently; use version-specific model documentation and contract tests.
 
-## Roadmap tiers
+`usage.input_tokens` currently counts scoring work, including uncached correction
+priors; `output_tokens` is always zero. Jev can report nonzero output tokens without
+autoregressive generation. A compatibility policy for usage still needs definition.
 
-- **v0 (current)**: stock backbone + LoRA, letter-token readout. Limits: 26 options.
-- **v1**: reserved option tokens (`<opt_0>…<opt_254>`) → 255 options (this is very likely
-  the origin of Jev's own 255 cap).
-- **v2**: trained scoring head over option spans + packed questions with block-causal
-  masking (kev-0.5b is a working reference implementation; the archerhume probe indicates
-  this is Jev's actual architecture: additive token counts, flat latency at 100+ questions,
-  listwise option effects). Adopt only when the eval shows a wall — see DECISIONS.md #1.
+## Serving: MLX first
+
+`scripts/serve.py` is a single-threaded `HTTPServer` with HTTP/1.1. Earlier experiments
+encountered an MLX stream error in handler threads and client issues with HTTP/1.0.
+Those observations motivated the current configuration, not universal claims about
+MLX threading or Node's HTTP support.
+
+The target is a bounded MLX inference worker with an HTTP front end, backpressure,
+validated requests, safe error handling, and measured concurrency. Keep GPU work
+on a controlled execution context. Implement microbatching and cache policies
+before promising production latency or exposing the service beyond localhost.
+
+Small architectural changes are part of the model goal: primitive-aware inputs,
+possible specialized readouts, and efficient shared-state execution. Select changes
+using controlled quality, memory, and latency experiments.
+
+A Rust front end or full runtime is optional. First determine whether the bottleneck
+is Python/tokenization, scheduling, GPU kernels, or model capacity. Rust alone does
+not reduce transformer FLOPs or fix duplicated KV tensors. A second backend also
+requires tokenizer, rendering, weights, and numerical-parity tests. See
+[Roadmap](ROADMAP.md) for sequencing and acceptance criteria.

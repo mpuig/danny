@@ -1,111 +1,191 @@
-# How to Evaluate
+# Evaluation
 
-## Metrics (calibration first)
+Evaluate three separate properties: **decision quality against labels/outcomes**,
+**fidelity to Jev**, and **runtime/API correctness**. None establishes the other two.
+The product goal is useful automation at an acceptable error cost, not ECE alone.
 
-Defined in `src/jev/metrics.py`:
+## Implemented metrics
 
-- **ECE** (expected calibration error, 15 bins): |top-1 confidence − empirical accuracy|,
-  bin-weighted. The headline metric.
-- **Brier**: mean squared error between distribution and one-hot label. Proper scoring rule.
-- **NLL**: −log p(true label). Proper scoring rule, punishes confident errors hardest.
-- **accuracy**, **mean_top1_prob** (their gap is a quick overconfidence read).
-- **score_mae** for score tasks: |weighted-mean score − true level|.
+`src/jev/metrics.py` reports:
 
-Accuracy alone is *not* success — a model can be accurate and dangerously overconfident.
+- **NLL:** negative log probability of the true label; penalizes confident errors.
+- **Brier:** mean sum of squared errors against one-hot labels, not divided by
+  class count. For binary tasks this is twice the scalar binary Brier convention.
+- **Accuracy** and **mean top-1 probability**.
+- **ECE:** 15 fixed-width bins comparing top-1 probability with empirical accuracy.
+  This uses `max(probabilities)`, **not** the API's entropy-derived `confidence`.
+- **Score MAE** in the evaluator: error between the weighted-mean level index and
+  the gold level. It is not a complete measure of ordinal distribution quality.
 
-## Protocol
+NLL/Brier are proper scoring rules and should lead the probabilistic comparison.
+Retain accuracy and ECE as complementary diagnostics. ECE at n=200 is sensitive
+to binning and sampling; small differences need uncertainty intervals. Low ECE
+can coexist with a model too uninformative to automate useful work.
 
-- **Held-out tasks** (never in training): `sst2` (noul), `tweet_emotion` (choice).
-  These measure generalization to unseen questions — the product claim.
-- In-domain test splits of training tasks measure fit.
-- Default n=200, canonical question phrasing (index 0), `--calibrate` on unless the
-  point is to measure raw behavior.
-- Compare like with like: same n, same split, same calibration flag.
+## What the current splits establish
 
-## Commands
+| Evaluation | What it measures |
+|---|---|
+| Test splits of ag_news, dbpedia, imdb, yelp_stars | New examples within training task families |
+| SST-2 validation split | Cross-dataset movie-sentiment transfer: canonical question and criteria match training IMDB |
+| Tweet-emotion test split | A held-out question relative to the four-task recast mix, still sentiment-adjacent |
+| Kev test, after training on Kev train | In-family performance, including grouped robustness variants |
+| Unfamiliar rubric/task-family suite | **Not implemented**; needed for the central generalization claim |
+
+There is no held-out Score family in the recast suite. Public dataset names and
+splits do not rule out pretraining exposure. Historical tuning against SST-2 also
+means it should not be treated as a pristine final test for new research choices.
+
+Check [Data](DATA.md) before training: the current validation set overlaps teacher
+and Kev training. Different seeds do not ensure separation. For new experiments,
+reserve test groups first and keep calibration separate from model-selection data.
+Kev test questions/variants share documents; confidence intervals must respect
+those groups rather than treating all 1,048 converted questions as independent.
+
+## Commands that exist today
+
+The recast evaluator defaults to **n=100**, canonical phrasing, seed 42, and
+contextual correction **off**. Historical tables below use the stated n and flag.
+Run matched raw and corrected evaluations rather than enabling correction silently.
 
 ```bash
-# calibration eval on any task, any checkpoint:
+# Raw baseline on a built-in recast task.
 uv run python scripts/eval_baseline.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --task sst2 --n 200 --calibrate [--adapter adapters/smollm3-3b]
+    --task sst2 --n 200
 
-# option-order robustness (choice tasks):
-uv run python scripts/permutation_test.py --model ... --task ag_news --n 100 \
-    [--adapter ...] [--calibrate]
-# reports argmax_flip_rate and mean_tv_distance; Jev-quality target: low single digits %
+# Trained variant; requires an existing matching adapter.
+uv run python scripts/eval_baseline.py --model mlx-community/SmolLM3-3B-Base-bf16 \
+    --task sst2 --n 200 --adapter adapters/smollm3-3b --calibrate
 
-# one Jev-shaped request, all three primitives:
-uv run python scripts/demo_request.py --model ...
+# Choice option-order sensitivity: one random nonidentity permutation per example.
+uv run python scripts/permutation_test.py --model mlx-community/SmolLM3-3B-Base-bf16 \
+    --task ag_news --n 100 --adapter adapters/smollm3-3b --calibrate
 
-# drop-in API compatibility via the official TypeScript SDK:
-uv run python scripts/serve.py --model ... --adapter ... --calibrate --port 8399 &
-cd tests/ts && npm install && node test.ts            # against our server
-cd tests/ts && node test.ts --with-jev                # also against the real Jev API
+# Teacher fidelity. Calls Jev only if the local task/n cache is absent.
+uv run python scripts/agreement_vs_jev.py --model mlx-community/SmolLM3-3B-Base-bf16 \
+    --task tweet_emotion --n 100 --adapter adapters/smollm3-3b-distill --calibrate
 ```
 
-## Results so far (SmolLM3-3B-Base unless noted; n=200)
+The agreement script reports epsilon-smoothed `KL(ours || Jev)`, argmax agreement,
+and both models' accuracy. It does **not** currently report Noul MAE despite its
+module description. Rounded teacher zeros make KL sensitive to the `1e-9` epsilon;
+normalize targets and add total variation or Jensen–Shannon distance before using
+KL as the only fidelity metric.
 
-### Held-out tasks (generalization) — three-way comparison
+Teacher caches are named only by task and n. An existing incomplete cache is
+accepted without checking count, rubric, dataset revision, or teacher version.
+Audit the cache before comparing runs; pin and record versions in the next harness.
 
-All columns + contextual calibration, n=200. One-hot LoRA: 8,000 gold examples.
-Distill LoRA: 2,000 Jev soft targets (¼ the data).
+There is **no external-JSONL evaluation command yet**. `eval_baseline.py` accepts
+only the six registered recast tasks. Passing converted Kev data as the trainer's
+`--val` gives a loss, not the full evaluation battery, and using the test file there
+would contaminate model selection.
 
-| Task | untuned | one-hot LoRA | **Jev-distilled LoRA** |
-|---|---|---|---|
-| sst2 acc | 0.695¹ | 0.925 | 0.920 |
-| sst2 ECE | 0.088¹ | 0.068 | **0.061** |
-| sst2 NLL | 0.59¹ | 0.228 | **0.224** |
-| tweet_emotion acc | 0.82 | 0.82 | **0.825** |
-| tweet_emotion ECE | 0.205 | 0.134 | **0.065** |
-| tweet_emotion Brier | 0.324 | 0.292 | **0.256** |
+### SDK smoke test
 
-¹ with the lettered noul template; the original bare yes/no template scored 0.535 acc /
-0.297 ECE. Key result: the distilled model **halves ECE vs one-hot on the harder held-out
-task from a quarter of the training data** — Jev's soft targets carry calibration that
-one-hot labels cannot.
+```bash
+# Terminal 1:
+uv run python scripts/serve.py --model HuggingFaceTB/SmolLM2-135M --port 8399
+# Terminal 2, with a Node version supporting TypeScript type stripping:
+cd tests/ts && npm install && node test.ts
+# Optional live comparison, requires TYPESAFE_API_KEY:
+node test.ts --with-jev
+```
 
-### Agreement with the real Jev (held-out states, n=100, + calib)
+This checks one basic request with three primitives. It does not certify all SDKs,
+invalid inputs, structured criteria, confidence formulas, context limits, question
+independence, or numerical parity. See [Architecture](ARCHITECTURE.md).
 
-| Task | metric | untuned | one-hot | distill | Jev itself |
-|---|---|---|---|---|---|
-| sst2 | KL(ours ‖ Jev) | 0.303 | **0.056** | 0.072 | — |
-| sst2 | argmax agreement | 0.73 | 0.91 | 0.91 | — |
-| sst2 | accuracy | 0.69 | 0.91 | 0.91 | 0.94 |
-| tweet_emotion | KL(ours ‖ Jev) | 4.23 | 3.04 | **1.69** | — |
-| tweet_emotion | argmax agreement | 0.88 | 0.89 | 0.88 | — |
-| tweet_emotion | accuracy | 0.82 | 0.79 | **0.84** | 0.86 |
+## Historical results — retained, not rerun in this review
 
-(The large tweet_emotion KLs are dominated by Jev's near-zero tail probabilities; the
-relative ordering is the signal.) Within 2–3 accuracy points of Jev on both held-out
-tasks with a local 3B model.
+These tables were recorded before the documentation audit. Local adapter files
+exist, but complete run manifests and per-example student predictions are absent.
+The tables are exploratory results, not independently reproduced measurements.
 
-### Permutation sensitivity (ag_news, n=100, + calib; adapters trained BEFORE
-shuffling augmentation — these are the "before" baselines)
+### Recast comparisons (SmolLM3-3B-Base, n=200)
 
-| | untuned | one-hot | distill |
-|---|---|---|---|
-| argmax flip rate | 0.11 | 0.09 | **0.06** |
-| mean TV distance | 0.147 | 0.088 | **0.070** |
+All columns use contextual correction. Gold corpus: 8,000 rows; teacher corpus:
+2,000 rows. Corpus size is not optimizer exposure count. Data composition, target
+source, and training budget were not controlled to isolate soft-target effects.
+The existing rendered gold data was subsequently augmented; historical runs are
+recorded as predating shuffled-data retraining.
 
-Reference: kev reports 7.4% flips *with* augmentation. Our next training cycle uses the
-shuffled data; rerun this test after it.
+| Task / metric | Untuned | Gold-label LoRA | Jev-distilled LoRA |
+|---|---:|---:|---:|
+| SST-2 accuracy | 0.695 | 0.925 | 0.920 |
+| SST-2 ECE | 0.088 | 0.068 | 0.061 |
+| SST-2 NLL | 0.59 | 0.228 | 0.224 |
+| Tweet-emotion accuracy | 0.820 | 0.820 | 0.825 |
+| Tweet-emotion ECE | 0.205 | 0.134 | 0.065 |
+| Tweet-emotion Brier | 0.324 | 0.292 | 0.256 |
 
-### In-domain (ag_news, untuned)
+The distilled adapter's lower tweet-emotion ECE/Brier is promising, but does not
+prove that it learned transferable calibration from soft targets. Gold-label CE
+can also learn calibrated distributions. Use matched examples, augmentation,
+training budgets, multiple seeds, and paired intervals for that claim.
 
-raw: 0.75 acc / 0.117 ECE / 0.40 Brier → +calibration: 0.80 / 0.107 / 0.31.
+An earlier bare yes/no Noul template reported SST-2 accuracy 0.535 / ECE 0.297.
+It differs from the standard lettered template, so it is not a clean raw-versus-
+corrected ablation of the current engine.
 
-### Reference points
+### Agreement with Jev (n=100, contextual correction)
 
-- 135M sst2: 0.58 acc untuned (n=50); 0.515 / 0.103 ECE with LoRA+calib (n=200) — tiny
-  backbone generalizes weakly; used for pipeline smoke tests only.
-- Real Jev (from its API on our demo ticket): refund noul 0.99, choice confidence 1.00.
-  Jev on MMLU (external probe): ECE 0.031. Those are the targets.
-- Distillation set analysis: Jev argmax = gold on 88.4% of 2000 pulled examples; 45% of
-  its targets genuinely soft.
+| Task | Metric | Untuned | Gold-label | Distilled | Jev |
+|---|---|---:|---:|---:|---:|
+| SST-2 | KL(ours ∥ Jev) | 0.303 | 0.056 | 0.072 | — |
+| SST-2 | Argmax agreement | 0.73 | 0.91 | 0.91 | — |
+| SST-2 | Accuracy | 0.69 | 0.91 | 0.91 | 0.94 |
+| Tweet emotion | KL(ours ∥ Jev) | 4.23 | 3.04 | 1.69 | — |
+| Tweet emotion | Argmax agreement | 0.88 | 0.89 | 0.88 | — |
+| Tweet emotion | Accuracy | 0.82 | 0.79 | 0.84 | 0.86 |
 
-## Pending evals
+The teacher accuracies can be recomputed from the local 100-row caches; the student
+metrics require inference reruns. Large KL values reflect teacher near-zero tails
+as well as disagreement. These small samples do not establish general parity with
+Jev or equivalence of downstream decision policies.
 
-1. Rerun permutation test after the shuffled-data retrain (expect flip rate to drop).
-2. Post-temperature-scaling ECE per primitive (use kev's decision-v1/v2 calibration split).
-3. External benchmark: `data/kev_test.jsonl` (kev's frozen test split, 1,048 questions).
-4. Combined-mix training (ours 8k shuffled + kev 11k + Jev 2k soft) → full battery.
+### Choice permutation sensitivity (ag_news, n=100, contextual correction)
+
+| Metric | Untuned | Gold-label | Distilled |
+|---|---:|---:|---:|
+| Argmax flip rate | 0.11 | 0.09 | 0.06 |
+| Mean total variation | 0.147 | 0.088 | 0.070 |
+
+Recorded as **pre-shuffling** adapter baselines. Re-run after retraining, using the
+same states/permutations. External projects' flip rates use different protocols
+and are not direct baselines. Jev itself has documented order sensitivity; zero
+sensitivity is a robustness goal, not a promise of behavioral replication.
+
+### Other historical observations
+
+- Untuned ag_news: raw 0.75 accuracy / 0.117 ECE / 0.40 Brier;
+  corrected 0.80 / 0.107 / 0.31.
+- 135M SST-2: untuned 0.58 accuracy at n=50; LoRA plus correction 0.515 accuracy /
+  0.103 ECE at n=200. Different n prevents a direct comparison.
+- An external Jev probe reports MMLU ECE around 0.031 with a different dataset,
+  binning, and model. It is context, not this project's acceptance threshold.
+- Current teacher-target integrity and gold agreement are in [Data](DATA.md).
+
+## Required next evaluation work (not implemented)
+
+1. **Data/provenance:** frozen group-disjoint train/dev/calibration/test manifests;
+   external JSONL support; per-example predictions and complete run configuration.
+2. **Probability quality:** paired bootstrap intervals, reliability plots,
+   classwise/primitive-level analysis, and raw/corrected/temperature-scaled variants.
+3. **Rubric transfer:** same state under different questions and changed criteria;
+   unfamiliar task families; missing evidence; structured paths; contrastive pairs.
+4. **Primitive behavior:** preserve Noul identity; compare joint versus per-level
+   Score models; test applicability gates versus relative Choice selection.
+5. **Workflow usefulness:** error cost, risk–coverage, threshold-local reliability,
+   and final actions. Weighted composite scores are not automatically calibrated
+   event probabilities, and marginal probabilities need not be independent.
+6. **Engine correctness:** single versus batched results, mixed primitives, padding,
+   question addition/removal/reordering, ID renaming, finite distributions, tokenizer
+   labels, cache fallback, and adapter reload parity. Use declared tolerances.
+7. **Serving:** target-hardware latency percentiles, throughput, and peak memory
+   across state length, question count, option count, concurrency, and cold/warm
+   correction caches. Compare serial and concurrent baselines fairly.
+
+Select thresholds and model variants on development/calibration data, then freeze
+them before final test evaluation. Arithmetic and broad reasoning tests diagnose
+scope limits; they are not the main acceptance test for a System One model.

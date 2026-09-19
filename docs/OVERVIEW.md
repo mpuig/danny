@@ -1,66 +1,125 @@
 # Overview
 
-## What this is
+Reviewed 2026-09-19 against the current code, local data, and the public Jev docs.
 
-An open reimplementation of the ideas behind [Typesafe's Jev](https://docs.typesafe.ai/introduction):
-a **System One model** that answers typed questions about a text `state` and returns
-calibrated probability distributions instead of generated text. Software consumes the
-answers directly — no parsing, no hallucinated formats.
+## Goal
 
-Three primitives, mirroring Jev's API exactly:
+Build a small, fine-tuned **System One model** on an existing pretrained backbone
+such as SmolLM or Qwen. Make targeted architectural changes for typed decisions,
+useful uncertainty, and efficient multi-question inference. Do not pretrain a new
+foundation model or assume we have recovered Jev's private architecture.
 
-| Primitive | Question | Returns |
+**MLX is the primary training and serving backend on Apple Silicon.** The current
+Python server is a development implementation. Rust remains an optional deployment
+path if measured limits justify the extra backend and parity work.
+
+The intended interface is:
+
+> Structured evidence + a narrow, request-defined judgment → a typed probabilistic answer.
+
+| Primitive | Intended question | Answer fields |
 |---|---|---|
-| `choice` | which of these options? | `choice`, `probabilities`, `confidence` |
-| `score` | which level on an ordered spectrum? | `score` (probability-weighted mean), `probabilities`, `legend`, `confidence` |
-| `noul` | is this true? | `noul` = P(yes) ∈ [0, 1] |
+| Choice | Which supplied option fits best? | `choice`, `probabilities`, `confidence` |
+| Score | Where does the state fit on a descriptive scale? | `score`, `probabilities`, `legend`, `confidence` |
+| Noul | Is this statement true? | `noul`: probability of yes |
 
-A request is `{state, questions}` (questions keyed by ID); the response answers **every**
-question — guaranteed by construction, since nothing is generated or parsed.
+Application code owns arithmetic, control flow, authorization, and side effects.
+Ask independent atomic questions together, including speculative questions that
+some code paths will ignore. Make another call when earlier answers determine
+new evidence or options. Question independence is not statistical independence.
 
-## Goals
+## Success criteria
 
-1. **Calibration first.** Jev's product is honest uncertainty ("if an intelligent system
-   cannot express honest uncertainty, the system cannot be trusted"). Our primary metrics
-   are ECE, Brier, and NLL — accuracy is secondary.
-2. **Generalization to unseen questions.** One model, arbitrary rubrics defined at request
-   time. We evaluate on tasks that were never in training.
-3. **Drop-in API compatibility.** The official Typesafe SDKs work against our server via a
-   base-URL override (verified with `@typesafe-ai/sdk` for TypeScript).
-4. **Local and cheap.** Runs on Apple Silicon via MLX; small backbones (135M–3B).
-5. **Open recipe.** Everything reproducible: data recasting, training loop, eval harness.
+1. **Useful decisions with useful uncertainty.** Measure predictive quality,
+   NLL/Brier, calibration, and how much work can be automated at a chosen error cost.
+   Low calibration error alone is not success.
+2. **Transfer to unfamiliar rubrics.** One model interprets new instructions and
+   criteria at request time. Evaluate by held-out rubric and task family, not only
+   by held-out document or dataset.
+3. **Jev-like primitive behavior and API compatibility.** Preserve structured
+   inputs, primitive identity, isolated questions, and typed responses. Distinguish
+   wire compatibility, behavioral agreement, and correctness against outcomes.
+4. **Efficient local serving.** Establish latency, memory, and throughput limits on
+   the actual target hardware. Prefer improving MLX before adding another runtime.
+5. **A reproducible recipe.** Version datasets, rendering, targets, weights, and
+   evaluations. The current scripts do not yet capture all of that provenance.
 
-Non-goals: matching Jev's frontier-scale reasoning (its ~83% MMLU-Pro implies a ~10B-active
-MoE backbone), text generation, multimodality.
+## Scope and limitations
 
-## Why not just prompt an LLM?
+Start with English text and JSON state, narrow semantic judgments, and small
+backbones. SmolLM3-3B is the current research model; SmolLM2-135M checks the pipeline.
+Qwen is a candidate comparison, not an implemented second architecture.
 
-LLM token probabilities exist, but (a) chat/RLHF models are miscalibrated by training,
-(b) zero-shot templates carry severe biases (we measured a 94% yes-bias on bare yes/no
-prompts), and (c) generation + parsing is slow and can fail. This project keeps the
-pretrained knowledge, replaces generation with a one-forward-pass logit readout, and
-trains specifically for calibrated decisions.
+Non-goals include free-form generation, multimodal inference, exact arithmetic,
+and matching a much larger model's broad knowledge. Jev itself documents weaknesses
+in counting, dates, indirection, adversarial state, and irrelevant long context.
+Its reported benchmark scores do not identify its parameter count or prove an MoE
+architecture.
 
-## Competitive landscape (reviewed 2026-09)
+Typed readout prevents invented output labels; it does not prevent wrong answers,
+invalid input, runtime failures, or prompt injection. Successful valid requests
+return every question ID, but this is not an unconditional availability guarantee.
 
-| Project | Backbone | Approach | Gap |
-|---|---|---|---|
-| [jeff](https://github.com/logan-markewich/jeff) | GLiFormer 400M encoder | zero-shot heads, API server | weak on irony/comprehension; breaks question independence for throughput |
-| [kev](https://github.com/jaredpalmer/kev) | Qwen2.5-0.5B frozen + scoring head | block-causal packed questions, augmentation | in-distribution only; 0.5B ceiling |
-| [Bespoke Nimble](https://github.com/bespokelabsai/nimble) | Qwen3.5-9B logit readout | contrastive minimal-pair curation (90.1% vs Jev 93.2%) | calibration untuned |
-| openjev / openjev-sglang | various | logit readout replicas | accuracy-focused |
-| **this project** | SmolLM3-3B (+ 135M for smoke tests) | logit readout + **Jev-distilled soft targets**, calibration-first, held-out generalization | see roadmap |
+## Why this approach
 
-Best external evidence on Jev's internals: [archerhume.com probing article](https://archerhume.com/posts/jevs-architecture-unmasked/) —
-shared-state encoding with isolated per-question branches, trained classifier head,
-proper-scoring-rule training (ECE 0.031 on MMLU), probable sparse MoE. This matches our
-Phase-3 roadmap (see ARCHITECTURE.md).
+Restricted-logit readout avoids autoregressive answer generation and parsing.
+A pretrained model supplies language understanding; fine-tuning adapts it to
+request-defined decisions. Small architectural changes can preserve primitive
+semantics and reduce inference work without replacing the entire backbone.
 
-## Status
+Token probabilities are not automatically outcome probabilities. Neither a base
+checkpoint, proper-scoring-rule loss, teacher distillation, nor contextual bias
+correction guarantees calibration after deployment. Base and instruction-tuned
+checkpoints should be compared rather than excluding the latter categorically.
 
-- Engine, Jev-compatible server, TS-SDK drop-in verification, training loop, distillation
-  pipeline, eval harness: **done and tested**.
-- Best held-out result so far (3B + one-hot LoRA + contextual calibration, n=200):
-  sst2 **0.925 acc / 0.068 ECE**; tweet_emotion ECE 0.205 → **0.134** at equal accuracy.
-- In flight: Jev-distilled (soft-target) adapter; then three-way comparison and
-  KL-agreement-vs-Jev eval.
+## Current evidence and status
+
+Implemented: the MLX readout engine, LoRA training, recast data building, Kev
+conversion, Jev target collection, recast evaluation, permutation testing,
+teacher-agreement evaluation, and a development server with a TypeScript SDK smoke
+test. This is not a comprehensive correctness or compatibility suite.
+
+Gold-label and distilled 3B adapter files exist locally. Historical evaluation
+results now include both; distillation is no longer merely "in flight".
+[Evaluation](EVALUATION.md) preserves the numbers and their limitations.
+
+The SST-2 result measures transfer from IMDB to another movie-review dataset:
+the canonical question and criteria are identical. Tweet emotion provides a
+held-out question relative to the four-task recast mix, but not broad evidence
+of arbitrary-rubric generalization. There is no held-out Score family in that mix.
+
+The new external data expands coverage to entailment, reading comprehension, and
+question classification. It is not ready for blind concatenation: see
+[Data](DATA.md) for invalid Nimble downloads, overlap, and missing split artifacts.
+
+## Evidence sources and how to interpret them
+
+Primary sources, reviewed 2026-09-19:
+
+- [Introduction](https://docs.typesafe.ai/introduction),
+  [building workflows](https://docs.typesafe.ai/concepts/how-to-build-with-system-one),
+  and [AI primer](https://docs.typesafe.ai/introduction/machine-learning-primer).
+- [Primitives](https://docs.typesafe.ai/primitives),
+  [structured inputs](https://docs.typesafe.ai/primitives/advanced),
+  [confidence](https://docs.typesafe.ai/confidence), and [HTTP API](https://docs.typesafe.ai/api).
+- [Models](https://docs.typesafe.ai/models) and
+  [Jev 1.13 limitations](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
+- [Launch article](https://typesafe.ai/blog/introducing-system-one-models-and-jev):
+  explains the product and workflow evaluations; their model-consensus references
+  are not observed-outcome calibration measurements.
+
+Secondary sources and implementation references:
+
+- [Archer Hume's probes, revised article](https://archerhume.com/posts/jevs-architecture-unmasked/?v=3):
+  supports behavioral isolation and Choice option interactions. The head, attention
+  implementation, backbone size, MoE routing, and exact training objective remain
+  unconfirmed. Choice evidence must not be generalized to Score without testing.
+- [SGNT's explanation](https://sgnt.ai/p/jev/): distinguishes a restricted-logit
+  wrapper from a trained decision model; cross-project results are not controlled
+  comparisons with this repository.
+- [Kev](https://github.com/jaredpalmer/kev) and
+  [Nimble](https://github.com/bespokelabsai/nimble) are data/design references, not
+  evidence that one architecture or training recipe must be used here.
+
+See [Architecture](ARCHITECTURE.md) for known divergences and
+[Roadmap](ROADMAP.md) for the next implementation stages.
