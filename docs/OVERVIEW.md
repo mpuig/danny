@@ -86,9 +86,16 @@ a development server. The first implementation milestone adds:
 - Canonical external evaluation with saved per-example predictions.
 - Python data/schema/HTTP/cache tests plus opt-in local model and LoRA smoke tests.
 
-This is not complete Jev compatibility or proof of useful v1 model quality. Score
-still uses a joint-level readout, confidence remains entropy-derived, and native
-BF16 single/batch probability drift was observed. See [Architecture](ARCHITECTURE.md).
+Follow-up work trained actual SmolLM/Qwen v1 adapters, tested independent Score
+levels and wide Choice, fitted temperatures, ran matched cached-teacher experiments,
+and implemented bounded serving. Selected Qwen reached 81.3% development accuracy
+and 76.2% on a small synthetic rubric diagnostic. Candidate wide-Choice quality was
+near chance; in-family calibration did not transfer reliably to new rubrics.
+
+Confidence now defaults to pinned public adapter formulas in v1. Independent execution
+is the stable default after diagnosing low-precision shape-dependent drift. This is
+not complete Jev compatibility or safe-workflow certification. See
+[Experiments](EXPERIMENTS.md), [Architecture](ARCHITECTURE.md), and [Serving](SERVING.md).
 
 Gold-label and distilled 3B adapter files exist locally. Historical evaluation
 results now include both; distillation is no longer merely "in flight".

@@ -120,12 +120,12 @@ rows and scores suffixes together. Token-level matching avoids string/BPE bounda
 assumptions. Question contexts remain isolated, but cache copying and mixed-template
 prefix mismatches limit reuse.
 
-## 14. Single-threaded HTTP/1.1 development server
+## 14. Single-threaded HTTP/1.1 development server (historical)
 
 This configuration followed an observed MLX stream error with threaded handlers
 and a client integration issue with HTTP/1.0. It is not a general prohibition on
-threaded serving or a universal statement about Node fetch. Production work needs
-a controlled inference worker, bounded queue, and concurrency tests.
+threaded serving or a universal statement about Node fetch. A model-owning worker,
+bounded queue, and concurrency tests now replace that configuration (decision 21).
 
 ## 15. Dataset substitutions
 
@@ -148,7 +148,8 @@ Reserved option tokens, slot/pointer heads, per-level Score readouts, and packed
 attention are candidates, not confirmed Jev internals or mandatory upgrades.
 The 255-option cap is an API constraint, not proof of a fixed token/head layout.
 Prioritize data integrity, structured inputs, primitive identity, and a controlled
-model comparison. Contrastive examples and temperature scaling remain planned.
+model comparison. Contrastive data remains open; per-level readout and temperature
+scaling were subsequently implemented and evaluated (decision 21).
 
 ## 18. Separate completed code, recorded evidence, and unimplemented work
 
@@ -187,4 +188,27 @@ Regression tests cover data, rendering, HTTP behavior, cache retry safety, and a
 two-step 135M adapter round trip. Native BF16 single/batch inference differed by
 ~0.03 on a fixture; FP32 reference parity passed. That precision issue remains
 open, rather than being hidden behind a loose tolerance. No full v1 quality run,
-specialized primitive head, fitted calibration, or bounded service is claimed.
+specialized primitive head, fitted calibration, or bounded service was claimed at
+that milestone.
+
+## 21. Follow evidence across the five requested experiment tracks
+
+Diagnosed shape-dependent low-precision drift and made independent execution the
+default. Shared execution remains explicit, with FP32 reference tests rather than
+relaxed native tolerances. Both backbones were actually trained on identical admitted
+examples. Qwen regressed at 5e-5 but reached 81.3% development accuracy at the
+predeclared 1e-5 control; select on development, not held-out rubric performance.
+
+Keep candidate readout experimental: description isolation and 255-option execution
+work, but a matched-source pilot is not matched compute, and 77-way quality was
+near chance. Fit temperatures only on calibration, retain outcome metrics separately
+from teacher fidelity, and distinguish pinned public confidence formulas from live
+Jev equivalence. Cached teacher experiments cannot invent the missing teacher version.
+
+Serving now loads and executes MLX on one worker behind bounded HTTP/queue admission.
+Limits cover bytes, tokens, views, microbatches, and caches. Deadlines discard expired
+queued work but cannot force-preempt a running Metal kernel. Keep loopback defaults,
+report actual model identity and measured performance, and do not equate these bounds
+with production security or demonstrated workflow safety.
+
+See [Experiments](EXPERIMENTS.md) for measured results and remaining evidence gates.

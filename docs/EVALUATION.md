@@ -13,7 +13,7 @@ The product goal is useful automation at an acceptable error cost, not ECE alone
   class count. For binary tasks this is twice the scalar binary Brier convention.
 - **Accuracy** and **mean top-1 probability**.
 - **ECE:** 15 fixed-width bins comparing top-1 probability with empirical accuracy.
-  This uses `max(probabilities)`, **not** the API's entropy-derived `confidence`.
+  This uses `max(probabilities)`, **not** the API's derived `confidence` statistic.
 - **Score MAE** in the evaluator: error between the weighted-mean level index and
   the gold level. It is not a complete measure of ordinal distribution quality.
 
@@ -122,7 +122,8 @@ uv run python -m unittest discover -s tests/python -v
 
 # Requires a cached/downloadable non-quantized 135M model. With HF_HUB_OFFLINE=1,
 # a missing cache fails rather than downloading. Training uses temporary fixtures.
-HF_HUB_OFFLINE=1 JEV_TEST_MODEL=HuggingFaceTB/SmolLM2-135M JEV_TEST_TRAINING=1 \
+HF_HUB_OFFLINE=1 JEV_TEST_MODEL=HuggingFaceTB/SmolLM2-135M \
+    JEV_TEST_TRAINING=1 JEV_TEST_CANDIDATE=1 \
     uv run python -m unittest discover -s tests/python -v
 ```
 
@@ -130,6 +131,9 @@ The initial suite covers JSON boundaries, primitive identity, golden v0/v1 promp
 renderer/adapter compatibility, label tokens, target validation, known-wrapper
 normalization, transitive grouped splits, manifest hashes, invalid downloads,
 HTTP 422/structured requests, cache retry safety, and two-step LoRA save/reload/eval.
+Additional tests cover candidate isolation/255 options, calibration/configuration
+pinning, reference confidence formulas, paired group bootstrap, bounded caches,
+worker ownership, saturation, deadlines/cancellation, and HTTP failure policy.
 Model tests are opt-in; core data/rendering tests need no model download.
 
 **Native-precision caveat:** on the tested SmolLM2-135M request, BF16 single versus
@@ -137,6 +141,18 @@ cached/batched predictions differed by about 0.03. FP32 cache-math tests pass at
 `2e-5` probability tolerance; native batch-order tests use `2e-3`. This is not a
 claim that native single/batch parity passes. Measure that drift before depending
 on tight decision thresholds. See [Architecture](ARCHITECTURE.md).
+
+## Current controlled results
+
+[Experiments](EXPERIMENTS.md) records actual v1 training, selected Qwen's 81.3%
+development accuracy, calibration and synthetic rubric results, readout/wide-Choice
+failures, and matched cached-teacher comparisons with grouped intervals. Keep those
+separate from the historical tables below. The main Kev test remains reserved.
+
+For paired comparisons, `scripts/compare_runs.py --first RUN_A --second RUN_B --out
+FRESH.json` requires matched IDs, labels, and data hash. Whole-group bootstrap
+intervals are descriptive; they do not cover training-seed variance, label error,
+multiple comparisons, or selection bias. ECE is particularly noisy on small suites.
 
 ## Historical results — retained, not rerun in this review
 

@@ -81,6 +81,13 @@ cross-source leakage checks. See [Training](docs/TRAINING.md) for the v1 LoRA co
 
 ## Evidence so far
 
+On the same 1,128-question development set, structured-v1 SmolLM2-135M reached
+**67.0% accuracy**; Qwen3-0.6B at LR 1e-5 reached **81.3%** (NLL **0.460**, or
+**0.448** with calibration-partition temperature fitting). Qwen scored **76.2%** on
+42 synthetic rubric cases, but those labels need independent review. Candidate
+wide-Choice predictions were near chance; calibration did not reliably transfer to
+new rubrics. See [Experiments](docs/EXPERIMENTS.md) for controls and limitations.
+
 Historical 3B experiments report SST-2 accuracy of **0.925** with gold-label LoRA
 and contextual correction (n=200). SST-2 shares its question and criteria with
 the IMDB training task: this is **cross-dataset transfer**, not unseen-question
@@ -100,7 +107,7 @@ or overlapping legacy artifacts. See [Data](docs/DATA.md).
 - [Serving](docs/SERVING.md) — bounded worker, limits, deadlines, and local deployment
 - [Experiments](docs/EXPERIMENTS.md) — controlled model/readout/calibration experiments
 - [Data](docs/DATA.md) — external inventory, integrity checks, and split risks
-- [Training](docs/TRAINING.md) — executable v0 recipe and its limitations
+- [Training](docs/TRAINING.md) — v1 experiments, calibration, and historical v0 recipes
 - [Evaluation](docs/EVALUATION.md) — metrics, commands, historical results, and required tests
 - [Roadmap](docs/ROADMAP.md) — staged model and runtime implementation plan
 - [Decisions](docs/DECISIONS.md) — experiment history and revised decisions

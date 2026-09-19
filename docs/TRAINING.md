@@ -21,9 +21,18 @@ download from Hugging Face on first use. Only live Jev collection requires
 # Only if this output directory has not already been prepared:
 uv run python scripts/prepare_data.py --out-dir data/kev-v1
 
-uv run python scripts/train_lora.py --model mlx-community/SmolLM3-3B-Base-bf16 \
-    --train data/kev-v1/train.jsonl --val data/kev-v1/development.jsonl \
-    --out adapters/smollm3-3b-structured-v1 --batch-size 4 --max-steps 800 --lr 1e-5
+# Requires both model/tokenizer snapshots already cached (see Quickstart).
+# Freeze the same tokenizer-admitted examples for a backbone comparison.
+uv run python scripts/prepare_experiment.py \
+    --models HuggingFaceTB/SmolLM2-135M Qwen/Qwen3-0.6B \
+    --out-dir data/experiments/v1-matched
+
+# Best Qwen setting among the small, completed development comparison.
+uv run python scripts/train_lora.py --model Qwen/Qwen3-0.6B \
+    --train data/experiments/v1-matched/train.jsonl \
+    --val data/experiments/v1-matched/development.jsonl \
+    --out adapters/qwen3-0.6b-v1-new-run \
+    --batch-size 8 --epochs 1 --lr 1e-5 --seed 42 --max-seq 768
 ```
 
 The preparer verifies source checksums, preserves provenance/structured inputs,
@@ -37,19 +46,23 @@ ablation; it does not alter the canonical files. Run that ablation through
 historical HTTP server flattens object state. Only v1 guarantees a shared structured
 serialization contract across training, direct inference, and HTTP.
 
-The trainer records `renderer_version` in adapter metadata, and arguments, data
-hashes, retained/skipped counts, optimizer steps, and example exposures in
-`training_manifest.json`. Both Python shuffling and MLX initialization are seeded.
+The trainer records renderer/readout versions in adapter metadata, plus arguments,
+data hashes, retained/skipped counts, optimizer steps, example/view exposures,
+validation losses, memory/time, backbone/tokenizer hashes and snapshot revision,
+package/platform details, and source hashes in `training_manifest.json`. Both Python
+shuffling and MLX initialization are seeded.
 Existing adapter directories are refused rather than overwritten.
 
-This is still joint letter-token readout, not new primitive-specific heads.
-Option-order augmentation for canonical examples, a per-level Score model,
-temperature fitting, and periodic checkpoints remain future work.
+Letters remain the default. `--readout candidate-v1` uses independent binary
+Score/Choice views, weighted by inverse candidate count. It must be trained and
+evaluated as a separate adapter; more views mean more optimizer steps. This is not
+a new private Jev head. Canonical option-order augmentation and resumable optimizer
+checkpoints remain future work.
 
-Use only `development.jsonl` for model selection. `calibration.jsonl` is reserved
-for future calibration fitting, and `test.jsonl` for frozen final evaluation.
-No full structured-v1 3B training run has been completed by the implementation
-smoke tests; those tests train the 135M on four fixture examples for two steps.
+Use only development for selection, calibration for temperature fitting, and test
+for frozen final evaluation. Actual 135M and 0.6B v1 runs are complete; a 3B v1 run
+has not been completed. See [Experiments](EXPERIMENTS.md) for outcomes, including
+Qwen's sensitivity to learning rate and the candidate pilot's limitations.
 
 ## 3. Historical recast gold-label data
 
@@ -190,9 +203,11 @@ were reported to take 25–45 minutes, with one interrupted before saving.
 
 The trainer now seeds Python batch order and MLX initialization, checks label
 encodings, validates targets/split overlap, and writes a training manifest.
-It does not yet pin/hash the base weights and tokenizer revision, record all
-software/hardware versions, or support periodic/resumable checkpoints. Numerical
-determinism across devices and dependency versions is not guaranteed.
+It now captures base/tokenizer asset hashes, cached revision, package/platform,
+and source identities. Immutable local snapshot paths and offline cached runs avoid
+mutable remote revision lookup; manifests are provenance, not an environment lockfile.
+Periodic/resumable checkpoints and complete device-level reproducibility remain open.
+Numerical determinism across devices and dependency versions is not guaranteed.
 
 ## 7. Serve an adapter
 
@@ -201,8 +216,40 @@ uv run python scripts/serve.py --model mlx-community/SmolLM3-3B-Base-bf16 \
     --adapter adapters/smollm3-3b-recast-v0 --port 8399
 ```
 
-For a v1 run, replace the adapter path with `adapters/smollm3-3b-structured-v1`.
-The engine selects the adapter's renderer automatically; older metadata without a
-renderer version selects v0. Add `--calibrate` only as an explicitly evaluated
-contextual-correction variant. The server is still a development HTTP implementation; see
-[Architecture](ARCHITECTURE.md) for its compatibility and serving limits.
+For the completed v1 Qwen run, use `--model Qwen/Qwen3-0.6B` and
+`--adapter adapters/qwen3-0.6b-structured-v1-lr1e-5`. The engine selects recorded
+renderer/readout versions; old metadata selects v0/letters. Add `--calibrate` only
+as an evaluated contextual-correction variant. `--temperature FILE` is separate,
+and a Kev-fitted temperature is not guaranteed to help unfamiliar workflows.
+See [Serving](SERVING.md) for the bounded worker's operating envelope.
+
+## 8. Reproduce the additional controlled experiments
+
+Use fresh output paths; none of these commands makes live teacher calls.
+
+```bash
+uv run python scripts/prepare_architecture_experiment.py \
+    --out-dir data/experiments/readout-pilot-new
+# Train two fresh base-model adapters with --readout letters-v1 / candidate-v1.
+# Both use the same pilot train.jsonl and canonical development file.
+
+uv run python scripts/build_rubric_holdout.py \
+    --out-dir data/experiments/heldout-rubrics-new
+
+uv run python scripts/prepare_teacher_experiment.py \
+    --out-dir data/experiments/teacher-matched-new
+# Train gold/, hard/, soft/, mixed/ train.jsonl from fresh base weights,
+# each against the same development.jsonl. Do not initialize from a Kev adapter.
+
+uv run python scripts/eval_dataset.py --model Qwen/Qwen3-0.6B \
+    --adapter adapters/qwen3-0.6b-structured-v1-lr1e-5 \
+    --data data/kev-v1/calibration.jsonl --out-dir data/evals/qwen-calibration-new
+uv run python scripts/fit_calibration.py \
+    --predictions-dir data/evals/qwen-calibration-new \
+    --data-manifest data/kev-v1/manifest.json --out data/evals/qwen-temperature-new.json
+# Evaluate development/holdouts with --temperature using otherwise identical settings.
+```
+
+Temperature artifacts reject mismatched weights/tokenizers, rendering/readout,
+precision, execution policy, or contextual correction. In particular, a native
+independent artifact cannot be silently reused with FP32 shared inference.

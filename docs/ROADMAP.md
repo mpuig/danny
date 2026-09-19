@@ -1,6 +1,6 @@
 # Model and serving roadmap
 
-Status: **foundations partly implemented; later milestones remain planned**.
+Status: **foundations, controlled model/readout experiments, and bounded serving implemented**.
 Updated 2026-09-19. Acceptance gates below are not all met.
 
 ## Implementation status
@@ -9,13 +9,21 @@ Updated 2026-09-19. Acceptance gates below are not all met.
   records; connected-group train/dev/calibration/test splits; hashes and leakage
   checks. A local corpus is prepared. External gold evaluation saves per-example
   predictions. Cross-source migration, teacher versioning, task-family holdouts,
-  and tokenizer/base-weight revision capture remain open.
+  and independent human review remain open. Tokenizer/weight revisions, asset hashes,
+  package versions, and source hashes are now recorded.
 - **Phase 2, partial:** shared v1 JSON renderer; explicit primitive identity; legacy
   compatibility; strict label tokens; request validation; Python/HTTP/model smoke
-  tests. Confidence parity, native-precision stability, and broader context/backbone
-  tests remain open.
-- **Phases 3–5:** not started. Only a two-step 135M fixture-training smoke test has
-  run, not a model-quality experiment or serving benchmark.
+  tests. Published adapter confidence formulas are pinned; independent execution
+  avoids sibling-dependent shapes. Live Jev parity and broader backbone tests remain open.
+- **Phase 3, experiments completed:** real matched SmolLM/Qwen runs, Qwen learning-rate
+  control, candidate/letter pilot, 77-way quality test, 255-option contract test,
+  fitted calibration, synthetic held-out rubrics, and matched cached-teacher regimes.
+  Quality results are mixed; these are not all acceptance gates passed.
+- **Phase 4, implemented/measured:** model-owning worker, bounded HTTP/queue admission,
+  token/view/cache budgets, deadlines, discovery, telemetry, and HTTP benchmark tooling.
+  Hard kernel cancellation, authentication, paged KV, and deployment certification remain open.
+- **Phase 5, pending:** demonstrate workflow value and risk–coverage on independently
+  reviewed frozen cases. No evidence currently requires a Rust rewrite.
 
 The stability investigation found up to 0.031 drift on SmolLM2-135M and 0.060 on
 Qwen3-0.6B, including a native Qwen argmax flip. Independent execution is now the

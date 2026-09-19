@@ -7,8 +7,9 @@ changes**. Reviewed 2026-09-19. MLX remains the primary training and serving bac
 
 `src/jev/engine.py` loads an MLX language model, optionally with a LoRA adapter.
 It uses the framework-independent `src/jev/rendering.py` to render prompts, reads
-final-position logits for ` A` through ` Z`, and applies softmax over those labels
-only. Application code serializes the answer. There is no answer-generation loop.
+final-position logits for label tokens and applies a restricted softmax. The default
+`letters-v1` uses ` A` through ` Z`; `candidate-v1` combines binary candidate
+judgments. Application code serializes answers; there is no answer-generation loop.
 
 Bare models default to `structured-v1`. Adapters select their recorded
 `renderer_version`; metadata-free historical adapters select `legacy-v0`.
@@ -23,9 +24,10 @@ a separate head is an experiment, not automatically an improvement.
 ```text
 respond(request)
   └─ ask(state, questions)
-       ├─ _render(state, question)
-       ├─ _score_batch(prompts)
+       ├─ render_views(state, question) + admission budgets
+       ├─ _score_batch(prompts) + combine_views
        ├─ _apply_calibration(question, probabilities)  # optional bias correction
+       ├─ temperature_scale(probabilities)             # optional fitted artifact
        └─ _to_answer(question, probabilities)
 ```
 
@@ -33,9 +35,9 @@ respond(request)
 
 | Primitive | Current computation | Important limitation |
 |---|---|---|
-| Choice | Whole list of named/described options; letter-token softmax | 26-option cap; position and label-token bias |
+| Choice | Joint letter softmax, or binary candidate views with all alternatives visible | Letters cap at 26; candidates support 255 but require multiple forwards |
 | Noul | Binary letter readout `A=no`, `B=yes`; return `p_yes` | v1 retains a Noul type marker; legacy-v0 erases it |
-| Score | Whole list of lettered level descriptions; categorical softmax | Levels interact in one prompt, unlike the separate-level behavior described by Jev |
+| Score | Joint letter baseline, or independent description-only binary views normalized afterward | The normalization/objective is our design, not a disclosed Jev implementation |
 
 Score uses zero-based level indices: `score = sum(i * p_i)`. This expectation is
 not an exact numeric measurement or a separate regression prediction.
@@ -49,8 +51,10 @@ been retrained for this format.
 
 **Score semantics:** the [Score docs](https://docs.typesafe.ai/primitives/score)
 say each level is evaluated separately, without its number or neighboring levels.
-Our joint-level readout differs. Compare it with a per-level scorer; the docs do
-not disclose Jev's exact scoring, normalization, or attention implementation.
+The optional candidate readout implements description isolation; the default joint
+readout does not. Adapters pin their readout and reject mismatches. The docs do not
+disclose Jev's exact scoring, normalization, or attention implementation. Candidate
+training uses weighted Bernoulli views; see [Experiments](EXPERIMENTS.md).
 
 ### Execution policy update
 
@@ -67,8 +71,9 @@ guarantee for the updated path.
 `src/jev/serialization.py` validates JSON, rejecting duplicate object keys,
 nonfinite numbers, unsupported values, and excessive nesting. Schema entries
 accept strings, objects, arrays, or null; state accepts strings, objects, or arrays.
-The schema permits 255 Choice options; both current renderers explicitly limit
-the letter readout to 26. Training and inference require distinct single-token labels.
+The schema permits 255 Choice options; letter readout is limited to 26. Candidate
+readout requires structured-v1. Training and inference require distinct single-token
+labels. Invalid Unicode surrogates are rejected before tokenization.
 
 In v1, state and every user-defined instruction/criterion are serialized as complete
 JSON values, preserving nested fields, arrays, nulls, string boundaries, and option
@@ -89,8 +94,9 @@ that an untuned model follows structured paths reliably.
 
 ## Current inference execution
 
-`_score_batch` tokenizes every complete prompt, finds their longest common token
-prefix, and uses caching when that prefix has at least eight tokens.
+Independent execution runs each prompt separately. In opt-in shared mode,
+`_score_batch` processes at most four views at a time, finds their longest common
+token prefix, and uses caching when that prefix has at least eight tokens:
 
 1. Encode the common prefix once into a KV cache.
 2. **Physically repeat** each layer's cached keys and values across batch rows.
@@ -101,21 +107,22 @@ With causal attention, those readout positions do not see later padding. Each
 row sees the prefix and its own suffix, not another question. This provides the
 intended information boundary, but bit-identical outputs are not a general guarantee.
 
-New local SmolLM2-135M tests found **~0.03 probability drift** between native BF16
-single/full-prefill and batched/cached scoring on a mixed structured request.
-Converting the test model to FP32 reduced differences below `2e-5`. Tests use that
-FP32 oracle for cache correctness and separately check native batch reordering.
-The production path still uses the loaded model's precision: native single/batch
-threshold stability remains an open issue, not a passed parity guarantee.
+Measured native BF16 single/shared drift reached **0.031 on SmolLM and 0.060 on
+Qwen**, including a Qwen argmax flip. FP32 substantially reduced drift on tested
+fixtures. Default independent execution avoids sibling-dependent computation shapes;
+it does not make native shared execution numerically safe. Tests retain the FP32
+structural oracle and explicit native drift measurements.
 
 Limitations:
 
-- Cache memory scales with question count because the prefix is copied.
-- Complete prompts are still tokenized separately.
+- Prefix KV is physically copied within the bounded microbatch; no paged cache.
+- Distinct complete prompts are tokenized separately; repeated prompts use a bounded
+  token LRU, not a reusable state-embedding cache.
 - Legacy Choice/Noul and Score templates have different text before state and
   can lose state-prefix sharing. structured-v1 fixes that prefix mismatch.
 - New questions require three extra content-free evaluations when correction is on.
-- There is no request-size bound, microbatch policy, or bounded prior cache.
+- Request/state/prompt/view budgets and bounded caches are implemented. These are
+  local operating ceilings, not a guarantee against every model/device OOM.
 - Architecture support remains limited. The optimized body/head path is now chosen
   before suffix execution; errors after execution starts propagate rather than
   retrying against a potentially mutated cache. A regression test covers this.
@@ -141,24 +148,24 @@ It can help or hurt outcome calibration and can remove meaningful prior informat
 Priors are cached by question; new rubrics incur additional work.
 
 Training CE matches the **raw** label readout, not the corrected distribution.
-Evaluate raw and corrected predictions separately. Temperature scaling on a disjoint
-calibration partition is planned, not implemented.
+Evaluate raw and corrected predictions separately. `scripts/fit_calibration.py` fits
+per-primitive temperatures only on a declared disjoint calibration partition.
+`--temperature FILE` verifies weights/tokenizer and inference configuration. It is
+separate from `--calibrate`; neither guarantees calibration under distribution shift.
 
 ### Confidence
 
-Current Choice and Score confidence is `1 - normalized_entropy(probabilities)`.
-It measures concentration, not the probability that an answer is correct.
-
-This differs from the published
+Structured-v1 defaults to the formulas in the published
 [TypeSafe adapter at revision fb52b103](https://github.com/typesafe-ai/system-one-adapter-python/blob/fb52b1030b7fc1f4f1cf39910afa5da54f9835e3/src/system_one_adapter/_utils/confidence_metrics.py):
 
 - Choice uses `(p_max - 1/K) / (1 - 1/K)`, with a one-option special case.
 - Score uses distance from the modal level relative to a uniform reference.
 
 The [confidence docs](https://docs.typesafe.ai/confidence) describe a derived
-statistic but do not specify an exact versioned formula. Align with a pinned
-reference and verify live responses, accounting for rounding, before claiming
-semantic compatibility. Do not transfer thresholds across definitions or primitives.
+statistic but do not specify an exact versioned formula. Live Jev equivalence is
+not verified. Legacy rendering defaults to `entropy-v0`, which can also be selected
+explicitly. These measures are not correctness probabilities. Do not transfer
+thresholds across definitions or primitives.
 
 ## API compatibility: current subset
 
@@ -166,14 +173,14 @@ semantic compatibility. Do not transfer thresholds across definitions or primiti
 |---|---|
 | `POST /v1/systemone`, answers keyed by question ID | Implemented for basic requests; IDs stay out of prompts |
 | String/object/array state; structured instructions and criteria | Deliberately serialized/validated in v1; historical conversion retained in v0 |
-| Choice up to 255 options | 1–26 supported |
-| Score with 2–10 levels and weighted mean | Implemented, with different model-side level handling |
+| Choice up to 255 options | Candidate readout supports all 255; quality at large width is not established |
+| Score with 2–10 levels and weighted mean | Joint and independent-level variants implemented |
 | Noul probability, no separate confidence | Response shape implemented |
-| Choice/Score confidence semantics | Different from the published adapter |
-| Response identifies the actual model version | Returns the loaded backbone name, not a requested Jev alias; full adapter identity remains TODO |
-| Validation failure uses HTTP 422 | Implemented for request/schema errors; production error handling remains incomplete |
-| `GET /v1/models` | Not implemented |
-| Context limits and usage | No enforced token budget; local execution counters are not Jev billing semantics |
+| Choice/Score confidence semantics | Pinned public adapter formulas by default in v1; no verified live parity |
+| Response identifies the actual model version | Backbone/adapter/configuration/implementation fingerprint, not a Jev alias |
+| Validation failure uses HTTP 422 | Implemented; body/framing, overload, timeout, and internal errors have separate statuses |
+| `GET /v1/models` | Implemented, with local metadata and effective limits |
+| Context limits and usage | Local token/view ceilings; scoring-work counters are not Jev billing semantics |
 
 Jev 1.13's [model page](https://docs.typesafe.ai/models) specifies 64k total request
 tokens and 32k for state plus the longest question. These are Jev's limits, not
@@ -186,15 +193,16 @@ autoregressive generation. A compatibility policy for usage still needs definiti
 
 ## Serving: MLX first
 
-`scripts/serve.py` is a single-threaded `HTTPServer` with HTTP/1.1. Earlier experiments
-encountered an MLX stream error in handler threads and client issues with HTTP/1.0.
-Those observations motivated the current configuration, not universal claims about
-MLX threading or Node's HTTP support.
+`scripts/serve.py` uses bounded HTTP threads and a bounded queue feeding one worker
+that loads and owns the model. HTTP threads never execute MLX operations. This
+addresses the earlier handler-thread stream failure without claiming arbitrary MLX
+thread safety. HTTP/1.1 connections close after each response.
 
-The target is a bounded MLX inference worker with an HTTP front end, backpressure,
-validated requests, safe error handling, and measured concurrency. Keep GPU work
-on a controlled execution context. Implement microbatching and cache policies
-before promising production latency or exposing the service beyond localhost.
+Admission budgets, LRU caches, a free-buffer allocator cap, cooperative deadlines,
+backpressure, model discovery, and runtime telemetry are implemented. Running Metal
+kernels cannot be force-preempted safely. There is no authentication or TLS; binding
+remotely requires an explicit override. See [Serving](SERVING.md) for the operating
+envelope and [Experiments](EXPERIMENTS.md) for measured results.
 
 Small architectural changes are part of the model goal: primitive-aware inputs,
 possible specialized readouts, and efficient shared-state execution. Select changes
