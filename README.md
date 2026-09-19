@@ -104,6 +104,7 @@ or overlapping legacy artifacts. See [Data](docs/DATA.md).
 
 ## Documentation
 
+- [Example benchmark](BENCHMARK.md) — 24 local Qwen requests compared with cached, unversioned Jev answers; not live parity evidence
 - [Overview](docs/OVERVIEW.md) — goals, scope, evidence, and sources
 - [Architecture](docs/ARCHITECTURE.md) — current implementation and compatibility gaps
 - [Serving](docs/SERVING.md) — SmolLM/Qwen launch commands, requests, options, and bounded deployment

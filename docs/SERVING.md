@@ -145,6 +145,10 @@ Do not add `--with-jev` for local testing; that option makes live external API c
 [`scripts/demo_request.py`](../scripts/demo_request.py) contains another payload,
 but running it loads a model directly rather than calling these HTTP servers.
 
+[Example benchmark](../BENCHMARK.md) compares 24 requests to the local Qwen server
+with cached, unversioned Jev answers. It includes per-case results and an offline
+reference runner; it makes no live Jev calls.
+
 ## Other model and serving options
 
 The commands below are **alternative launches**. Stop an existing process before
@@ -341,8 +345,9 @@ Fresh real-model benchmark runs verified clean SIGTERM exits, and a lifecycle te
 verifies inherited SIGINT handling. Selected Qwen also passed the SDK test with its
 fitted temperature; 24 development predictions matched archived probabilities exactly.
 
-Final verification: all **67 Python tests** passed with model, training, and
-candidate opt-ins enabled; Ruff, compile checks, all 20 CLI help commands, and
-Markdown link/fence/shell checks also passed.
+The implementation closeout (`0f207b3`) passed all **67 Python tests** with model,
+training, and candidate opt-ins enabled; Ruff, compile checks, the then-existing
+20 CLI help commands, and Markdown link/fence/shell checks also passed. The later
+cached-teacher benchmark adds five unit tests and its own HTTP comparison results.
 
 See [Experiments](EXPERIMENTS.md) for measured performance and model limitations.
