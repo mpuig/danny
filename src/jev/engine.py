@@ -20,7 +20,8 @@ from .schema import Answer, ChoiceAnswer, NoulAnswer, Question, ScoreAnswer
 from .serialization import State, dumps, validate_state
 from .rendering import (
     LETTERS, as_yes_no_choice, label_token_ids, legacy_choice_prompt,
-    legacy_score_prompt, render, resolve_renderer,
+    legacy_score_prompt, render, resolve_renderer, resolve_readout, render_views,
+    combine_views, LETTER_READOUT,
 )
 
 # Backward-compatible export for historical data scripts.
@@ -53,16 +54,24 @@ class SystemOneEngine:
         renderer_version: str | None = None,
         precision: str = "native",
         execution_mode: str = "independent",
+        readout_version: str | None = None,
+        max_batch_size: int = 4,
     ):
         if precision not in ("native", "float16", "float32"):
             raise ValueError("precision must be native, float16, or float32")
         if execution_mode not in ("independent", "shared"):
             raise ValueError("execution_mode must be independent or shared")
+        if type(max_batch_size) is not int or max_batch_size < 1:
+            raise ValueError("max_batch_size must be positive")
+        self.max_batch_size = max_batch_size
+        self.readout_version = resolve_readout(readout_version, adapter_path)
         self.precision = precision
         self.execution_mode = execution_mode
         self.model_name = model_name
         self.contextual_calibration = contextual_calibration
         self.renderer_version = resolve_renderer(renderer_version, adapter_path)
+        if self.readout_version != LETTER_READOUT and self.renderer_version != "structured-v1":
+            raise ValueError("candidate-v1 requires structured-v1")
         self.model, self.tokenizer = load(model_name, adapter_path=adapter_path)
         if precision != "native":
             dtype = getattr(mx, precision)
@@ -99,6 +108,10 @@ class SystemOneEngine:
         This isolates information, not low-precision rounding. Independent mode
         gives a prompt the same computation regardless of other questions.
         """
+        limit = getattr(self, "max_batch_size", 4)
+        if len(items) > limit:
+            return [row for start in range(0, len(items), limit)
+                    for row in self._score_batch(items[start:start+limit])]
         token_lists = [self.tokenizer.encode(p) for p, _ in items]
 
         common = 0
@@ -180,7 +193,7 @@ class SystemOneEngine:
         answer distribution over content-free states. Cached per question."""
         key = dumps([self.renderer_version, asdict(q)])
         if key not in self._prior_cache:
-            dists = self._score_batch([self._render(cf, q) for cf in _CONTENT_FREE_STATES])
+            dists = [self._raw_distributions(cf, {"q": q})["q"] for cf in _CONTENT_FREE_STATES]
             self._prior_cache[key] = [sum(col) / len(dists) for col in zip(*dists)]
         return self._prior_cache[key]
 
@@ -201,14 +214,21 @@ class SystemOneEngine:
         if any(not isinstance(key, str) or not isinstance(q, Question) for key, q in questions.items()):
             raise ValueError("questions must map string IDs to Question objects")
         qids = list(questions)
-        items = [self._render(state, questions[qid]) for qid in qids]
-        raw = self._score_batch(items)
+        raw = self._raw_distributions(state, questions)
         answers: dict[str, Answer] = {}
-        for qid, probs in zip(qids, raw):
+        for qid in qids:
+            probs = raw[qid]
             q = questions[qid]
             probs = self._apply_calibration(q, probs)
             answers[qid] = self._to_answer(q, probs)
         return answers
+
+    def _raw_distributions(self, state, questions):
+        readout = getattr(self, "readout_version", LETTER_READOUT)
+        views = {qid: render_views(state, q, self.renderer_version, readout) for qid, q in questions.items()}
+        raw = iter(self._score_batch([item for items in views.values() for item in items]))
+        return {qid: combine_views(questions[qid], [next(raw) for _ in items], readout)
+                for qid, items in views.items()}
 
     @staticmethod
     def _to_answer(q: Question, probs: list[float]) -> Answer:

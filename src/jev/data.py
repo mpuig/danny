@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterator
 
-from .rendering import LEGACY_V0, STRUCTURED_V1, render
+from .rendering import LEGACY_V0, STRUCTURED_V1, LETTER_READOUT, render_views
 from .schema import Question
 from .serialization import State, dumps, loads, validate_json, validate_state
 
@@ -322,7 +322,8 @@ def partition_summary(examples: list[Example]) -> dict:
     }
 
 
-def load_training_rows(path: str | Path, renderer_version: str | None = None) -> list[dict]:
+def load_training_rows(path: str | Path, renderer_version: str | None = None,
+                       readout_version: str = LETTER_READOUT) -> list[dict]:
     """Render canonical records or validate historical pre-rendered v0 files.
 
     Do not silently mix formats. Legacy content extraction is best-effort provenance,
@@ -336,13 +337,19 @@ def load_training_rows(path: str | Path, renderer_version: str | None = None) ->
     if all(canonical):
         version = renderer_version or STRUCTURED_V1
         for example in load_examples(path):
-            prompt, labels = render(example.state, example.question, version)
-            output.append({
-                "prompt": prompt, "labels": labels, "target": example.target,
-                "task": example.source, "id": example.id, "renderer_version": version,
-                "leakage_keys": example.leakage_keys,
-            })
+            views = render_views(example.state, example.question, version, readout_version)
+            for index, (prompt, labels) in enumerate(views):
+                target = (example.target if readout_version == LETTER_READOUT or example.question.type == "noul"
+                          else [1 - example.target[index], example.target[index]])
+                output.append({
+                    "prompt": prompt, "labels": labels, "target": target,
+                    "task": example.source, "id": f"{example.id}/view/{index}", "example_id": example.id,
+                    "renderer_version": version, "readout_version": readout_version,
+                    "weight": 1 / len(views), "leakage_keys": example.leakage_keys,
+                })
     else:
+        if readout_version != LETTER_READOUT:
+            raise ValueError("candidate readout requires canonical data, not legacy prompts")
         if renderer_version not in (None, LEGACY_V0):
             raise ValueError(f"{path}: pre-rendered legacy data requires {LEGACY_V0}")
         for number, row in enumerate(rows, 1):
@@ -359,6 +366,7 @@ def load_training_rows(path: str | Path, renderer_version: str | None = None) ->
                 output.append({
                     **row, "target": normalize_target(row["target"], len(labels)),
                     "id": f"{path}:{number}", "renderer_version": LEGACY_V0,
+                    "readout_version": LETTER_READOUT, "weight": 1.0,
                     "leakage_keys": {content_key(state)},
                 })
             except (KeyError, IndexError, TypeError, ValueError) as exc:

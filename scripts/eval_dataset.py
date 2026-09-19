@@ -24,7 +24,7 @@ from jev.data import load_examples, sha256_file
 from jev.engine import SystemOneEngine
 from jev.metrics import expected_calibration_error
 from jev.provenance import environment_identity, model_identity
-from jev.rendering import RENDERER_VERSIONS, render, resolve_renderer
+from jev.rendering import RENDERER_VERSIONS, READOUT_VERSIONS, render_views, resolve_renderer, resolve_readout
 from jev.serialization import dumps
 
 
@@ -56,6 +56,7 @@ def main():
     parser.add_argument("--precision", choices=["native", "float16", "float32"], default="native")
     parser.add_argument("--execution-mode", choices=["independent", "shared"], default="independent")
     parser.add_argument("--renderer", choices=RENDERER_VERSIONS)
+    parser.add_argument("--readout", choices=READOUT_VERSIONS)
     parser.add_argument("--calibrate", action="store_true", help="contextual correction, not temperature fitting")
     parser.add_argument("--n", type=int, default=0, help="0 = all; otherwise seeded example subsample")
     parser.add_argument("--seed", type=int, default=42)
@@ -71,16 +72,17 @@ def main():
         parser.error("input data changed while loading")
     adapter_hash = sha256_file(Path(args.adapter) / "adapters.safetensors") if args.adapter else None
     version = resolve_renderer(args.renderer, args.adapter)
+    readout = resolve_readout(args.readout, args.adapter)
     # Reject unsupported supervision/readouts before loading weights.
     for example in examples:
         if example.target_origin != "gold" or sum(p == 1 for p in example.target) != 1:
             parser.error("outcome evaluation requires one-hot gold targets, not teacher distributions")
-        render(example.state, example.question, version)
+        render_views(example.state, example.question, version, readout)
     if args.n and args.n < len(examples):
         examples = random.Random(args.seed).sample(examples, args.n)
     engine = SystemOneEngine(args.model, adapter_path=args.adapter,
                              contextual_calibration=args.calibrate, renderer_version=version,
-                             precision=args.precision, execution_mode=args.execution_mode)
+                             precision=args.precision, execution_mode=args.execution_mode, readout_version=readout)
     provenance = {"environment": environment_identity(), "backbone": model_identity(args.model)}
     out.mkdir(parents=True, exist_ok=False)
     rows = []
@@ -113,6 +115,7 @@ def main():
         by_primitive[row["primitive"]].append(row)
     report = {
         "arguments": vars(args), "renderer_version": engine.renderer_version,
+        "readout_version": engine.readout_version,
         "data_sha256": data_hash,
         "adapter_sha256": adapter_hash,
         **provenance,

@@ -44,6 +44,30 @@ Full local reports: `data/runs/stability-smollm2.json` and
 this synthetic benchmark. The original full-prefill/projection path can also differ
 numerically from last-position projection; new experiments must use matched code.
 
+## 2. Candidate readout implementation
+
+`--readout candidate-v1` is an explicit alternative to `letters-v1`, recorded in
+adapter metadata. A candidate adapter cannot silently use letter readout, or vice
+versa. This changes prompt factorization/readout and supervision, not the backbone
+parameter layout or a purported private Jev head.
+
+- **Score:** each level is evaluated without sibling descriptions or level indices.
+  Its yes probability is normalized with the other level probabilities afterward.
+- **Choice:** each named candidate sees the complete alternatives, including relational
+  options. Binary readouts support all 255 schema options without alphabet truncation.
+- **Noul:** retains its primitive-aware binary prompt.
+- **Training:** canonical soft/one-hot targets become candidate Bernoulli targets.
+  Each view has weight `1/K`, so a question does not get K times the total weight.
+  The optimizer still steps over view batches: compute/exposure differs from the
+  letter model and must be reported, not mistaken for a matched-compute ablation.
+- **Memory:** shared execution microbatches at four views by default; candidate
+  evaluation costs multiple forwards. A 255-option test is not a constant-cost claim.
+
+Verified: descriptor isolation/reordering fixtures, target mass/weights, adapter
+compatibility, actual 255-option 135M inference, and a candidate LoRA save/reload.
+A quality comparison follows separately; passing these tests does not establish
+that normalized binary judgments outperform joint scoring.
+
 ## Next experiments
 
 - Run both backbones on the same jointly token-admitted training/development rows,

@@ -15,6 +15,7 @@ import numpy as np
 
 from jev.engine import SystemOneEngine
 from jev.schema import Question
+from jev.rendering import LETTER_READOUT
 
 
 def fixture(repetitions=1, count=3):
@@ -52,6 +53,7 @@ def main():
     ap.add_argument("--counts", nargs="+", type=int, default=[3, 12])
     ap.add_argument("--state-repetitions", nargs="+", type=int, default=[1, 16])
     ap.add_argument("--repeats", type=int, default=5)
+    ap.add_argument("--max-batch-size", type=int, default=4)
     args = ap.parse_args()
     if min(args.counts + args.state_repetitions + [args.repeats]) < 1:
         ap.error("counts, lengths, and repeats must be positive")
@@ -60,7 +62,10 @@ def main():
         ap.error("output exists")
     results = []
     for precision in args.precisions:
-        engine = SystemOneEngine(args.model, adapter_path=args.adapter, precision=precision)
+        engine = SystemOneEngine(args.model, adapter_path=args.adapter, precision=precision,
+                                 max_batch_size=args.max_batch_size)
+        if engine.readout_version != LETTER_READOUT:
+            ap.error("this cache-math fixture requires letters-v1; benchmark candidate API requests separately")
         for length in args.state_repetitions:
             for count in args.counts:
                 state, questions = fixture(length, count)

@@ -28,7 +28,7 @@ from mlx_lm import load
 from mlx_lm.tuner.utils import linear_to_lora_layers
 
 from jev.data import assert_training_disjoint, load_training_rows, sha256_file
-from jev.rendering import RENDERER_VERSIONS, label_token_ids
+from jev.rendering import RENDERER_VERSIONS, READOUT_VERSIONS, LETTER_READOUT, label_token_ids
 from jev.provenance import environment_identity, model_identity
 
 LORA_PARAMS = {
@@ -85,17 +85,19 @@ def make_batches(rows: list[dict], batch_size: int, pad_id: int, rng: random.Ran
             mx.array(label_ids),
             mx.array(label_mask),
             mx.array(targets),
+            mx.array([r.get("weight", 1.0) for r in batch]),
         )
 
 
-def loss_fn(model, inputs, last_idx, label_ids, label_mask, targets):
+def loss_fn(model, inputs, last_idx, label_ids, label_mask, targets, weights=None):
     logits = model(inputs)  # (B, L, V)
     b, seq_len, vocab = logits.shape
     at_last = logits.reshape(b * seq_len, vocab)[last_idx + mx.arange(b) * seq_len]
     lab = mx.take_along_axis(at_last, label_ids, axis=1).astype(mx.float32)
     lab = lab + (1.0 - label_mask) * -1e9
     logp = lab - mx.logsumexp(lab, axis=1, keepdims=True)
-    return -(targets * logp).sum() / b
+    per_view = -(targets * logp).sum(axis=1)
+    return (per_view * weights).sum() / b if weights is not None else per_view.mean()
 
 
 def evaluate(model, rows, batch_size, pad_id) -> float:
@@ -103,7 +105,7 @@ def evaluate(model, rows, batch_size, pad_id) -> float:
     total, count = 0.0, 0
     for batch in make_batches(rows, batch_size, pad_id, rng):
         total += loss_fn(model, *batch).item() * batch[0].shape[0]
-        count += batch[0].shape[0]
+        count += batch[-1].sum().item()
     return total / max(count, 1)
 
 
@@ -119,6 +121,7 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--max-seq", type=int, default=768)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--readout", choices=READOUT_VERSIONS, default=LETTER_READOUT)
     ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None,
                     help="inferred from canonical (v1) or legacy (v0) data if omitted")
     args = ap.parse_args()
@@ -130,8 +133,8 @@ def main() -> None:
 
     # Validate supervision and splits before allocating a model or training it.
     input_hashes = {"train": sha256_file(args.train), "val": sha256_file(args.val)}
-    source_train = load_training_rows(args.train, args.renderer)
-    source_val = load_training_rows(args.val, args.renderer)
+    source_train = load_training_rows(args.train, args.renderer, args.readout)
+    source_val = load_training_rows(args.val, args.renderer, args.readout)
     if input_hashes != {"train": sha256_file(args.train), "val": sha256_file(args.val)}:
         ap.error("input data changed while loading")
     versions = {r["renderer_version"] for r in source_train + source_val}
@@ -201,11 +204,16 @@ def main() -> None:
                 "lora_parameters": LORA_PARAMS,
                 "model": args.model,
                 "renderer_version": renderer_version,
+                "readout_version": args.readout,
             }
         )
     )
     (out / "training_manifest.json").write_text(json.dumps({
         "arguments": vars(args), "renderer_version": renderer_version,
+        "readout_version": args.readout,
+        "source_train_examples": len({r.get("example_id", r["id"]) for r in source_train}),
+        "source_val_examples": len({r.get("example_id", r["id"]) for r in source_val}),
+        "exposure_unit": "model views; candidate views weighted by inverse candidates per source question",
         "train_sha256": input_hashes["train"], "val_sha256": input_hashes["val"],
         "train_rows": len(train_rows), "val_rows": len(val_rows),
         "train_skipped": train_skipped, "val_skipped": val_skipped,
