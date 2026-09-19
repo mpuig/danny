@@ -20,7 +20,13 @@ def validate_json(value: object, *, path: str = "value", depth: int = 0) -> None
     """Reject non-JSON values, nonfinite numbers, cycles, and excessive nesting."""
     if depth > 64:
         raise ValueError(f"{path}: JSON nesting exceeds 64 levels (or contains a cycle)")
-    if value is None or type(value) in (str, bool, int):
+    if type(value) is str:
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ValueError(f"{path}: strings must contain valid Unicode scalar values") from exc
+        return
+    if value is None or type(value) in (bool, int):
         return
     if type(value) is float:
         if not math.isfinite(value):
@@ -34,6 +40,7 @@ def validate_json(value: object, *, path: str = "value", depth: int = 0) -> None
         for key, item in value.items():
             if not isinstance(key, str):
                 raise ValueError(f"{path}: object keys must be strings")
+            validate_json(key, path=f"{path} object key", depth=depth + 1)
             validate_json(item, path=f"{path}.{key}", depth=depth + 1)
         return
     raise ValueError(f"{path}: unsupported JSON value {type(value).__name__}")

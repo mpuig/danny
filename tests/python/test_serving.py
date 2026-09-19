@@ -192,6 +192,8 @@ class BoundedHTTPTests(unittest.TestCase):
     def test_rejection_and_timeout_statuses(self):
         self.assertEqual(self.post('{"state":"' + "x" * 100 + '"}')[0], 413)
         self.assertEqual(self.post('{"state":NaN}')[0], 422)
+        self.assertEqual(self.post(r'{"state":"\ud800"}')[0], 422)
+        self.assertEqual(self.post(r'{"state":{"\ud800":"x"}}')[0], 422)
         self.assertEqual(self.post('{"state":"invalid"}')[0], 422)
         self.assertEqual(self.post('{"state":"slow"}')[0], 504)
         time.sleep(0.08)
