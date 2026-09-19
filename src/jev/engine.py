@@ -17,7 +17,12 @@ from mlx_lm import load
 from mlx_lm.models.cache import make_prompt_cache
 
 from .schema import Answer, ChoiceAnswer, NoulAnswer, Question, ScoreAnswer
-from .serialization import State, dumps, validate_state
+from .calibration import temperature_scale
+from .confidence import confidence, SCHEMES, ADAPTER, ENTROPY
+from .provenance import model_identity
+from .data import sha256_file
+from pathlib import Path
+from .serialization import State, dumps, loads, validate_state
 from .rendering import (
     LETTERS, as_yes_no_choice, label_token_ids, legacy_choice_prompt,
     legacy_score_prompt, render, resolve_renderer, resolve_readout, render_views,
@@ -56,6 +61,8 @@ class SystemOneEngine:
         execution_mode: str = "independent",
         readout_version: str | None = None,
         max_batch_size: int = 4,
+        temperature_path: str | None = None,
+        confidence_scheme: str | None = None,
     ):
         if precision not in ("native", "float16", "float32"):
             raise ValueError("precision must be native, float16, or float32")
@@ -72,6 +79,9 @@ class SystemOneEngine:
         self.renderer_version = resolve_renderer(renderer_version, adapter_path)
         if self.readout_version != LETTER_READOUT and self.renderer_version != "structured-v1":
             raise ValueError("candidate-v1 requires structured-v1")
+        self.confidence_scheme = confidence_scheme or (ENTROPY if self.renderer_version == "legacy-v0" else ADAPTER)
+        if self.confidence_scheme not in SCHEMES:
+            raise ValueError("unknown confidence scheme")
         self.model, self.tokenizer = load(model_name, adapter_path=adapter_path)
         if precision != "native":
             dtype = getattr(mx, precision)
@@ -83,6 +93,24 @@ class SystemOneEngine:
         self._label_cache: dict[str, int] = {}
         self._prior_cache: dict[str, list[float]] = {}
         self._input_tokens = 0
+        self._temperatures = {}
+        self.temperature_path = temperature_path
+        if temperature_path:
+            artifact = loads(Path(temperature_path).read_text())
+            expected = {
+                "renderer_version": self.renderer_version, "readout_version": self.readout_version,
+                "precision": precision, "execution_mode": execution_mode,
+                "contextual_correction": contextual_calibration,
+                "backbone_files": model_identity(model_name)["files"],
+                "adapter_sha256": sha256_file(Path(adapter_path)/"adapters.safetensors") if adapter_path else None,
+            }
+            if artifact.get("format_version") != 1 or artifact.get("method") != "per-primitive-temperature-v1" or artifact.get("prediction_config") != expected:
+                raise ValueError("temperature artifact does not match model/tokenizer/readout/runtime configuration")
+            for primitive, fit in artifact["fits"].items():
+                if primitive not in ("choice", "noul", "score"):
+                    raise ValueError("invalid calibration primitive")
+                temperature_scale([.5,.5], fit["temperature"])
+                self._temperatures[primitive] = fit["temperature"]
 
     # -- token-level readout --------------------------------------------------
 
@@ -220,7 +248,10 @@ class SystemOneEngine:
             probs = raw[qid]
             q = questions[qid]
             probs = self._apply_calibration(q, probs)
-            answers[qid] = self._to_answer(q, probs)
+            temperature = getattr(self, "_temperatures", {}).get(q.type)
+            if temperature is not None:
+                probs = temperature_scale(probs, temperature)
+            answers[qid] = self._to_answer(q, probs, getattr(self, "confidence_scheme", ENTROPY))
         return answers
 
     def _raw_distributions(self, state, questions):
@@ -231,20 +262,20 @@ class SystemOneEngine:
                 for qid, items in views.items()}
 
     @staticmethod
-    def _to_answer(q: Question, probs: list[float]) -> Answer:
+    def _to_answer(q: Question, probs: list[float], confidence_scheme: str = ENTROPY) -> Answer:
         if q.type == "choice":
             dist = dict(zip(q.criteria.keys(), probs))
             return ChoiceAnswer(
                 choice=max(dist, key=dist.get),
                 probabilities=dist,
-                confidence=_confidence(probs),
+                confidence=confidence(probs, "choice", confidence_scheme),
             )
         if q.type == "score":
             return ScoreAnswer(
                 score=sum(i * p for i, p in enumerate(probs)),
                 probabilities={str(i): p for i, p in enumerate(probs)},
                 legend={str(i): desc for i, desc in enumerate(q.criteria)},
-                confidence=_confidence(probs),
+                confidence=confidence(probs, "score", confidence_scheme),
             )
         return NoulAnswer(noul=probs[1])  # render order is [no, yes]
 

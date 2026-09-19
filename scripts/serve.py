@@ -14,6 +14,7 @@ import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from jev.engine import SystemOneEngine
+from jev.confidence import SCHEMES
 from jev.rendering import LEGACY_V0, RENDERER_VERSIONS, READOUT_VERSIONS
 from jev.serialization import loads, validate_state
 
@@ -68,6 +69,8 @@ def main() -> None:
     ap.add_argument("--adapter", default=None)
     ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None)
     ap.add_argument("--readout", choices=READOUT_VERSIONS)
+    ap.add_argument("--temperature")
+    ap.add_argument("--confidence", choices=SCHEMES)
     ap.add_argument("--calibrate", action="store_true")
     ap.add_argument("--precision", choices=["native", "float16", "float32"], default="native")
     ap.add_argument("--execution-mode", choices=["independent", "shared"], default="independent")
@@ -78,7 +81,7 @@ def main() -> None:
     engine = SystemOneEngine(
         args.model, contextual_calibration=args.calibrate, adapter_path=args.adapter,
         renderer_version=args.renderer, precision=args.precision, execution_mode=args.execution_mode,
-        readout_version=args.readout,
+        readout_version=args.readout, temperature_path=args.temperature, confidence_scheme=args.confidence,
     )
     # Retain the tested single-thread path until a controlled worker is added.
     server = HTTPServer((args.host, args.port), make_handler(engine))

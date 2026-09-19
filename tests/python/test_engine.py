@@ -1,6 +1,9 @@
 import importlib.util
 import math
 import os
+import json
+import tempfile
+from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -50,6 +53,25 @@ class EngineContractTests(unittest.TestCase):
         engine.tokenizer = SimpleNamespace(encode=lambda label, **kwargs: [0 if label == " A" else 1])
         with self.assertRaisesRegex(ValueError, "invalid probabilities"):
             engine._probs_from_logits(mx.array([float("nan"), 1]), [" A", " B"])
+
+    def test_temperature_artifact_is_configuration_pinned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'temperature.json'
+            artifact = {'format_version':1, 'method':'per-primitive-temperature-v1',
+                'prediction_config':{'renderer_version':STRUCTURED_V1,'readout_version':'letters-v1',
+                    'precision':'native','execution_mode':'independent','contextual_correction':False,
+                    'backbone_files':{},'adapter_sha256':None},
+                'fits':{'noul':{'temperature':2.0}}}
+            path.write_text(json.dumps(artifact))
+            with patch('jev.engine.load', return_value=(SimpleNamespace(eval=lambda: None), None)), \
+                 patch('jev.engine.model_identity', return_value={'files':{}}):
+                engine = SystemOneEngine('fixture',temperature_path=str(path))
+                engine._score_batch = lambda items: [[.1,.9] for _ in items]
+                self.assertAlmostEqual(engine.ask('s',{'q':Question('noul','?')})['q'].noul,.75)
+                artifact['prediction_config']['backbone_files']={'changed':'weights'}
+                path.write_text(json.dumps(artifact))
+                with self.assertRaisesRegex(ValueError,'does not match'):
+                    SystemOneEngine('fixture',temperature_path=str(path))
 
     def test_mutated_cache_is_not_retried(self):
         engine = self.engine()

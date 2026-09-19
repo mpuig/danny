@@ -22,10 +22,11 @@ from tqdm import tqdm
 
 from jev.data import load_examples, sha256_file
 from jev.engine import SystemOneEngine
+from jev.confidence import SCHEMES
 from jev.metrics import expected_calibration_error
 from jev.provenance import environment_identity, model_identity
 from jev.rendering import RENDERER_VERSIONS, READOUT_VERSIONS, render_views, resolve_renderer, resolve_readout
-from jev.serialization import dumps
+from jev.serialization import dumps, loads
 
 
 def summarize_rows(rows: list[dict]) -> dict:
@@ -57,6 +58,8 @@ def main():
     parser.add_argument("--execution-mode", choices=["independent", "shared"], default="independent")
     parser.add_argument("--renderer", choices=RENDERER_VERSIONS)
     parser.add_argument("--readout", choices=READOUT_VERSIONS)
+    parser.add_argument("--temperature", help="fitted, configuration-pinned temperature artifact")
+    parser.add_argument("--confidence", choices=SCHEMES)
     parser.add_argument("--calibrate", action="store_true", help="contextual correction, not temperature fitting")
     parser.add_argument("--n", type=int, default=0, help="0 = all; otherwise seeded example subsample")
     parser.add_argument("--seed", type=int, default=42)
@@ -82,8 +85,12 @@ def main():
         examples = random.Random(args.seed).sample(examples, args.n)
     engine = SystemOneEngine(args.model, adapter_path=args.adapter,
                              contextual_calibration=args.calibrate, renderer_version=version,
-                             precision=args.precision, execution_mode=args.execution_mode, readout_version=readout)
+                             precision=args.precision, execution_mode=args.execution_mode, readout_version=readout,
+                             temperature_path=args.temperature, confidence_scheme=args.confidence)
     provenance = {"environment": environment_identity(), "backbone": model_identity(args.model)}
+    training_manifest = Path(args.adapter) / "training_manifest.json" if args.adapter else None
+    if training_manifest is not None and training_manifest.is_file():
+        provenance["adapter_training"] = loads(training_manifest.read_text())
     out.mkdir(parents=True, exist_ok=False)
     rows = []
     # Exclusive creation and a final report distinguish complete runs from partial
@@ -116,6 +123,8 @@ def main():
     report = {
         "arguments": vars(args), "renderer_version": engine.renderer_version,
         "readout_version": engine.readout_version,
+        "confidence_scheme": engine.confidence_scheme,
+        "temperature_sha256": sha256_file(args.temperature) if args.temperature else None,
         "data_sha256": data_hash,
         "adapter_sha256": adapter_hash,
         **provenance,

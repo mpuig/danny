@@ -1,0 +1,71 @@
+{
+  "description": "Synthetic, hand-authored rubric holdout. Freeze before model evaluation; never train or fit temperatures on it. Needs independent human review; not a population-representative benchmark.",
+  "families": [
+    {
+      "name": "explicit-cancellation",
+      "question": {"type": "noul", "instructions": {"task": "Does ticket.message explicitly request cancellation now? A hypothetical future possibility, quotation, past event, or negated request does not count.", "path": "ticket.message"}},
+      "cases": [
+        ["Cancel my subscription immediately, please.", 1],
+        ["Do not cancel my subscription; I only need a new invoice.", 0],
+        ["Please end the recurring plan before its next renewal.", 1],
+        ["If the price rises again, I might cancel next month.", 0],
+        ["I am asking you to close my membership today.", 1],
+        ["My colleague wrote 'cancel my membership'; I am asking about account recovery.", 0],
+        ["Please stop renewing my membership and terminate the plan.", 1],
+        ["I cancelled an old plan last year. How do I update this plan's card?", 0],
+        ["End this plan. I no longer want the subscription.", 1],
+        ["Could you explain what would happen if I cancelled? I have not decided.", 0],
+        ["Go ahead and discontinue the monthly membership now.", 1],
+        ["Keep my plan active while you investigate the billing error.", 0]
+      ]
+    },
+    {
+      "name": "speech-act-routing",
+      "question": {"type": "choice", "instructions": "Classify the main speech act in ticket.message, not its topic.", "criteria": {"action_request": "The writer asks the recipient to perform an action now.", "proposal": "The writer suggests a possible future improvement without asking for immediate execution.", "incident_report": "The writer reports an observed failure without asking the recipient to perform a specific action."}},
+      "cases": [
+        ["Please restore my dashboard's missing charts now.", 0],
+        ["It might be useful to offer a compact dashboard layout someday.", 1],
+        ["The dashboard became blank after I changed its date range.", 2],
+        ["Revoke the old session and send me a fresh sign-in link.", 0],
+        ["Consider adding a preview before publishing reports in a future release.", 1],
+        ["Publishing the report failed with a gateway error this morning.", 2],
+        ["Move this workspace to the new billing account, please.", 0],
+        ["A shared billing history could be a helpful feature for teams.", 1],
+        ["The billing history screen shows the same invoice twice.", 2],
+        ["Please resend the invitation to the corrected email address.", 0],
+        ["For next quarter's roadmap, consider making invitations expire automatically.", 1],
+        ["The invitation page loops back to the login screen after acceptance.", 2]
+      ]
+    },
+    {
+      "name": "reproduction-evidence",
+      "question": {"type": "score", "instructions": "Rate the reproduction evidence in ticket.message. Judge only what is explicitly present, not urgency or sentiment.", "criteria": ["No concrete action sequence is supplied.", "Some concrete actions are supplied, but environment or observed failure is missing.", "A concrete ordered action sequence, environment, and observed failure are all supplied."]},
+      "cases": [
+        ["This app is frustrating and the charts are broken.", 0],
+        ["Open Reports, choose Quarterly, then press Export.", 1],
+        ["On Safari on macOS, open Reports, choose Quarterly, then press Export. The page becomes blank instead of downloading a file.", 2],
+        ["I cannot describe the steps yet; the app sometimes freezes.", 0],
+        ["On Firefox on Linux, open the workspace and select Members. That is the sequence I tried.", 1],
+        ["On Firefox on Linux, open the workspace, select Members, and click Invite. An empty error dialog appears and no invitation is sent.", 2],
+        ["People in our department say the sharing feature is unreliable.", 0],
+        ["Choose a file, open Share, and submit the form. An error appears, but I have not recorded the browser or operating system.", 1],
+        ["On Chrome on Windows, choose a file, open Share, and submit the form. The spinner never stops and the recipient receives nothing.", 2]
+      ]
+    },
+    {
+      "name": "operational-impact",
+      "question": {"type": "score", "instructions": "Rate the operational impact explicitly described in ticket.message. Do not infer unstated harm or use emotional tone as severity.", "criteria": ["Cosmetic issue or no active functional impact.", "A useful function is degraded or unavailable, but no ongoing data loss or security exposure is stated.", "Ongoing data destruction or active exposure of private information is explicitly stated."]},
+      "cases": [
+        ["The heading uses the wrong shade of blue; every control still works.", 0],
+        ["Report export fails for our workspace, although the data remains available in the app.", 1],
+        ["A public link is currently showing private customer records to unauthenticated visitors.", 2],
+        ["I am furious about the uneven spacing in a button label. The button works normally.", 0],
+        ["Search is unavailable, but records can still be opened directly and no data has disappeared.", 1],
+        ["Each synchronization is currently deleting stored attachments, including records that were not edited.", 2],
+        ["An old screenshot shows a typo; the current interface has already been corrected.", 0],
+        ["The invitation system is down. Existing members can still access their workspaces.", 1],
+        ["The download endpoint is actively serving other customers' confidential exports to signed-in users.", 2]
+      ]
+    }
+  ]
+}

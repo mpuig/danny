@@ -68,6 +68,40 @@ compatibility, actual 255-option 135M inference, and a candidate LoRA save/reloa
 A quality comparison follows separately; passing these tests does not establish
 that normalized binary judgments outperform joint scoring.
 
+## 3. Calibration, confidence, and frozen diagnostic data
+
+The temperature fitter accepts only complete predictions whose IDs, labels, and
+hash match the declared calibration partition. It checks split disjointness and
+adapter training/development hashes, and refuses already scaled predictions.
+Artifacts bind weights/tokenizer hashes, renderer/readout, precision, and execution
+policy. `--temperature FILE` fails closed on a configuration mismatch. Per-primitive
+scalar temperatures minimize outcome NLL; argmax is unchanged and out-of-domain
+calibration is not guaranteed.
+
+Structured-v1 confidence now defaults to the public TypeSafe adapter formulas pinned
+to commit `fb52b1030b7fc1f4f1cf39910afa5da54f9835e3`: scaled peak probability for Choice,
+modal-distance concentration for Score. `--confidence entropy-v0` retains the old
+statistic (also the legacy renderer default). These are not probabilities of
+correctness and have not been verified against a live Jev version.
+
+Frozen **before evaluation**:
+
+- `tests/fixtures/heldout_rubrics.json`: 42 synthetic cases across explicit cancellation,
+  speech-act routing, reproduction evidence, and operational impact. Includes new
+  Score rubrics. These hand-authored gold labels need independent review; this is a
+  small diagnostic, not a representative generalization benchmark. Never train,
+  calibrate, or tune on these cases.
+- `scripts/prepare_teacher_experiment.py`: exact legacy-prompt round trips recover
+  the cached teacher's original truncated input and rubric. The four regimes share
+  records, grouped splits, and targets aligned to the same keys: gold, teacher hard,
+  teacher soft, and 50/50 gold/soft. All start from base weights. Unknown teacher
+  versions and original source IDs remain explicitly unknown. No paid API calls.
+
+Prepared data are under `data/experiments/heldout-rubrics/` and
+`data/experiments/teacher-matched/`. The latter is a controlled experiment with a
+historical unversioned teacher, not fidelity evidence about current Jev. A pinned
+live-teacher collection still requires a chosen model version and approved budget.
+
 ## Next experiments
 
 - Run both backbones on the same jointly token-admitted training/development rows,
