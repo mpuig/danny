@@ -121,14 +121,17 @@ class SystemOneEngine:
         self.model, self.tokenizer, self.model_config = load(
             model_name, adapter_path=adapter_path, return_config=True
         )
-        self.context_limit = min(
-            self.limits.max_prompt_tokens,
-            int(
-                self.model_config.get(
-                    "max_position_embeddings", self.limits.max_prompt_tokens
-                )
-            ),
-        )
+        context_sizes = [
+            self.model_config[key]
+            for key in (
+                "max_position_embeddings",
+                "n_positions",
+                "n_ctx",
+                "context_length",
+            )
+            if type(self.model_config.get(key)) is int and self.model_config[key] > 0
+        ]
+        self.context_limit = min([self.limits.max_prompt_tokens, *context_sizes])
         if precision != "native":
             dtype = getattr(mx, precision)
             self.model.update(
@@ -156,7 +159,11 @@ class SystemOneEngine:
         self.temperature_path = temperature_path
         if temperature_path:
             artifact = loads(Path(temperature_path).read_text())
+            actual_config = dict(artifact.get("prediction_config", {}))
+            # Earlier artifacts were produced by evaluators fixed at four views.
+            actual_config.setdefault("max_batch_size", 4)
             expected = {
+                "max_batch_size": max_batch_size,
                 "renderer_version": self.renderer_version,
                 "readout_version": self.readout_version,
                 "precision": precision,
@@ -168,7 +175,7 @@ class SystemOneEngine:
             if (
                 artifact.get("format_version") != 1
                 or artifact.get("method") != "per-primitive-temperature-v1"
-                or artifact.get("prediction_config") != expected
+                or actual_config != expected
             ):
                 raise ValueError(
                     "temperature artifact does not match model/tokenizer/readout/runtime configuration"
@@ -232,6 +239,7 @@ class SystemOneEngine:
             "readout_version": readout,
             "precision": getattr(self, "precision", "native"),
             "execution_mode": getattr(self, "execution_mode", "independent"),
+            "shared_prefix_supported": self._head_projection() is not None,
             "confidence_scheme": getattr(self, "confidence_scheme", ENTROPY),
             "temperature_sha256": getattr(self, "temperature_digest", None),
             "max_batch_size": getattr(self, "max_batch_size", 4),
@@ -334,6 +342,7 @@ class SystemOneEngine:
         if (
             len(items) > 1
             and getattr(self, "execution_mode", "independent") == "shared"
+            and self._head_projection() is not None
         ):
             limit = min(len(t) for t in token_lists) - 1  # keep suffixes non-empty
             while common < limit and len({t[common] for t in token_lists}) == 1:
@@ -377,19 +386,31 @@ class SystemOneEngine:
             for i, (_, labels) in enumerate(items)
         ]
 
+    def _head_projection(self):
+        # Other wrappers may apply logit caps/scales after their output head or
+        # use non-KV caches. Do not bypass those transformations by duck typing.
+        if getattr(self, "model_config", {}).get("model_type") not in (
+            "llama",
+            "qwen3",
+            "smollm3",
+        ):
+            return None
+        body = getattr(self.model, "model", None)
+        head = getattr(self.model, "lm_head", None)
+        if head is None:
+            head = getattr(getattr(body, "embed_tokens", None), "as_linear", None)
+        return (body, head) if callable(body) and callable(head) else None
+
     def _last_logits(self, batch, last_idx, cache=None):
-        """Project only final positions on supported dense Llama/Qwen backbones.
+        """Project final positions only on verified families; otherwise use wrapper.
 
         Select the path before execution; never retry a mutated cache. Both
         independent and shared execution use the same final-position projection.
         """
         n = batch.shape[0]
-        body = getattr(self.model, "model", None)
-        head = getattr(self.model, "lm_head", None)
-        if head is None:
-            embedding = getattr(body, "embed_tokens", None)
-            head = getattr(embedding, "as_linear", None)
-        if callable(body) and callable(head):
+        projection = self._head_projection()
+        if projection is not None:
+            body, head = projection
             hidden = body(batch, cache=cache)
             sel = hidden[mx.arange(n), last_idx]
             logits = head(sel)

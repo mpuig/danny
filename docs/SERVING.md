@@ -13,7 +13,8 @@ curl http://127.0.0.1:8399/metrics
 
 Weights are local experiment artifacts, not bundled with this repository. Optional
 `--temperature FILE` must match the model, readout, renderer, precision, execution
-policy, and contextual-correction setting used to fit it.
+policy, microbatch size, and contextual-correction setting used to fit it. Older
+artifacts from the fixed-size evaluator imply a microbatch of four.
 
 ## Default operating envelope
 
@@ -32,7 +33,7 @@ policy, and contextual-correction setting used to fit it.
 | Answer width | 26 for letters; up to 255 for candidate readout |
 | Shared-execution microbatch | 4 views |
 | Cached question priors / tokenized prompts | 128 / 64 entries |
-| MLX free-buffer allocator cache | 512 MiB, process-wide |
+| MLX free-buffer allocator cache reclamation threshold | 512 MiB, process-wide |
 
 View/token budgets include uncached content-free correction work. A cold corrected
 request can therefore exceed a budget that a warm request fits. Each scoring stage
@@ -40,7 +41,9 @@ checks the remaining budget before its forwards; a late correction-stage rejecti
 can occur after raw scoring. Python caches use bounded LRU eviction; capacity zero
 disables storage. KV caches are per scoring call, not persistent request histories.
 Shared prefix KV is still physically copied, bounded by the microbatch and context
-limits. This is not paged attention or a total process-RAM reservation.
+limits. MLX reclaims cache excess on the next allocation, so a telemetry snapshot
+can exceed its configured threshold. This is not paged attention, a hard allocator
+ceiling, or a total process-RAM reservation.
 
 All ceilings are configurable through `--help`. Larger settings are not certified
 safe merely because a backbone advertises a longer context. Account for model
@@ -67,6 +70,10 @@ Expired/cancelled queued jobs never execute. Running jobs check deadlines betwee
 forwards. **An in-flight Metal kernel cannot be safely preempted by this thread
 worker.** A timed-out caller may leave that one kernel finishing; its result is
 discarded. This is not a hard real-time cancellation guarantee or a process supervisor.
+
+SIGINT and SIGTERM initiate shutdown even when a background shell passed an ignored
+SIGINT disposition. The benchmark verifies exit status and reports forced cleanup;
+a successful HTTP run alone is not a passed lifecycle test.
 
 The default binding is loopback. Non-loopback binding requires `--allow-remote`;
 there is **no authentication, TLS, tenant isolation, or public-service certification**.

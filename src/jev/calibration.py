@@ -6,7 +6,11 @@ import numpy as np
 
 
 def temperature_scale(probs: list[float], temperature: float) -> list[float]:
-    if not math.isfinite(temperature) or temperature <= 0:
+    if (
+        isinstance(temperature, bool)
+        or not math.isfinite(temperature)
+        or temperature <= 0
+    ):
         raise ValueError("temperature must be finite and positive")
     if (
         not probs
@@ -78,6 +82,7 @@ def prediction_config(report: dict) -> dict:
         "readout_version": report.get("readout_version", "letters-v1"),
         "precision": args.get("precision", "native"),
         "execution_mode": args.get("execution_mode", "independent"),
+        "max_batch_size": args.get("max_batch_size", 4),
         "contextual_correction": args.get("calibrate", False),
         "backbone_files": report["backbone"]["files"],
         "adapter_sha256": report["adapter_sha256"],
