@@ -346,6 +346,7 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     kept, rejected = 0, {"json": 0, "schema": 0, "duplicate": 0, "api": 0}
+    api_streak = 0
     written = len(existing_ids)
     progress = tqdm(total=args.n, initial=written, desc="scenarios")
 
@@ -400,9 +401,13 @@ def main() -> None:
             job, payload, bucket = finished.result()
             if bucket is not None:
                 rejected[bucket] += 1
-                if rejected["api"] > 20:
-                    raise SystemExit("too many API failures; stopping")
+                if bucket == "api":
+                    api_streak += 1
+                    if api_streak > 20:
+                        raise SystemExit("too many consecutive API failures; stopping")
+                    time.sleep(min(2 * api_streak, 30))
             else:
+                api_streak = 0
                 validated = payload["validated"]
                 new_states = {content_key(state) for state, _, _ in validated}
                 if new_states & seen_content or (job["pair"] and len(new_states) == 1):
