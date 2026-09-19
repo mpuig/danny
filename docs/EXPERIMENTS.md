@@ -102,6 +102,36 @@ Prepared data are under `data/experiments/heldout-rubrics/` and
 historical unversioned teacher, not fidelity evidence about current Jev. A pinned
 live-teacher collection still requires a chosen model version and approved budget.
 
+## 4. First matched backbone training results
+
+Frozen code `520038f`; all 8,769 training and 1,128 development questions passed
+both tokenizers' 768-token admission check (no exclusions). Each backbone trained
+one epoch, batch 8, learning rate 5e-5, seed 42, rank-16 attention LoRA. Exactly
+8,769 example presentations and 1,097 optimizer steps each. Native independent
+inference, no contextual correction or fitted temperature.
+
+| Model | Development accuracy | NLL | Brier | ECE |
+|---|---:|---:|---:|---:|
+| SmolLM2-135M untuned | 29.9% | 1.402 | 0.735 | 0.169 |
+| SmolLM2-135M LoRA | 67.0% | 0.747 | 0.425 | 0.040 |
+| Qwen3-0.6B untuned | 44.2% | 1.229 | 0.647 | 0.094 |
+| Qwen3-0.6B LoRA | 39.6% | 1.231 | 0.651 | 0.058 |
+
+Qwen regressed: lower ECE does not mean a better decision model. This protocol
+compares particular backbones/settings, not their best achievable performance.
+A separate predeclared 1e-5 learning-rate control will use the same Qwen examples,
+epoch, batch size, and seed; rubric results are not used to choose hyperparameters.
+
+Artifacts: `data/runs/baselines-v1/`, adapters
+`adapters/smollm2-135m-structured-v1/` and `adapters/qwen3-0.6b-structured-v1/`.
+These are in-family development point estimates on 800 connected groups, not a
+final test result. The reserved Kev test remains unevaluated. Training wall times
+include incidental development activity and are not isolated throughput benchmarks.
+
+`scripts/compare_runs.py` verifies paired IDs/labels and reports group-bootstrap
+intervals for outcome differences. Optional teacher targets add JS divergence,
+argmax agreement, and Noul MAE, separate from outcome correctness.
+
 ## Next experiments
 
 - Run both backbones on the same jointly token-admitted training/development rows,
