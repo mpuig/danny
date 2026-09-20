@@ -14,6 +14,7 @@ mlx_lm's built-in text-completion loss doesn't fit; this loop replaces it.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import random
@@ -86,10 +87,12 @@ def make_batches(rows: list[dict], batch_size: int, pad_id: int, rng: random.Ran
             mx.array(label_mask),
             mx.array(targets),
             mx.array([r.get("weight", 1.0) for r in batch]),
+            mx.array([1.0 if r.get("ordinal") else 0.0 for r in batch]),
         )
 
 
-def loss_fn(model, inputs, last_idx, label_ids, label_mask, targets, weights=None):
+def loss_fn(model, inputs, last_idx, label_ids, label_mask, targets, weights=None,
+            ordinal=None, rps_weight=0.0):
     logits = model(inputs)  # (B, L, V)
     b, seq_len, vocab = logits.shape
     at_last = logits.reshape(b * seq_len, vocab)[last_idx + mx.arange(b) * seq_len]
@@ -97,15 +100,23 @@ def loss_fn(model, inputs, last_idx, label_ids, label_mask, targets, weights=Non
     lab = lab + (1.0 - label_mask) * -1e9
     logp = lab - mx.logsumexp(lab, axis=1, keepdims=True)
     per_view = -(targets * logp).sum(axis=1)
+    if rps_weight and ordinal is not None:
+        # Ranked Probability Score for ordered levels: squared distance between
+        # cumulative predicted and target distributions. Padded columns are
+        # self-masking (both cumulatives have reached 1), as is the last level.
+        cum_p = mx.cumsum(mx.exp(logp), axis=1)
+        cum_t = mx.cumsum(targets, axis=1)
+        rps = ((cum_p - cum_t) ** 2 * label_mask).sum(axis=1)
+        per_view = per_view + rps_weight * ordinal * rps
     return (per_view * weights).sum() / b if weights is not None else per_view.mean()
 
 
-def evaluate(model, rows, batch_size, pad_id) -> float:
+def evaluate(model, rows, batch_size, pad_id, rps_weight=0.0) -> float:
     rng = random.Random(0)
     total, count = 0.0, 0
     for batch in make_batches(rows, batch_size, pad_id, rng):
-        total += loss_fn(model, *batch).item() * batch[0].shape[0]
-        count += batch[-1].sum().item()
+        total += loss_fn(model, *batch, rps_weight=rps_weight).item() * batch[0].shape[0]
+        count += batch[-2].sum().item()
     return total / max(count, 1)
 
 
@@ -121,6 +132,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--max-seq", type=int, default=768)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--rps-weight", type=float, default=0.0,
+                    help="weight of the Ranked Probability Score term on ordinal (score) rows")
     ap.add_argument("--readout", choices=READOUT_VERSIONS, default=LETTER_READOUT)
     ap.add_argument("--renderer", choices=RENDERER_VERSIONS, default=None,
                     help="inferred from canonical (v1) or legacy (v0) data if omitted")
@@ -161,10 +174,10 @@ def main() -> None:
           f"skipped {train_skipped}/{val_skipped} over {args.max_seq} tokens")
 
     optimizer = optim.Adam(learning_rate=args.lr)
-    step_fn = nn.value_and_grad(model, loss_fn)
+    step_fn = nn.value_and_grad(model, functools.partial(loss_fn, rps_weight=args.rps_weight))
     rng = random.Random(args.seed)
 
-    initial_val_loss = evaluate(model, val_rows, args.batch_size, pad_id)
+    initial_val_loss = evaluate(model, val_rows, args.batch_size, pad_id, args.rps_weight)
     print(f"initial val loss: {initial_val_loss:.4f}")
 
     step, ema, t0, examples_seen = 0, None, time.time(), 0
@@ -186,7 +199,7 @@ def main() -> None:
             break
 
     training_seconds = time.time() - t0
-    final_val_loss = evaluate(model, val_rows, args.batch_size, pad_id)
+    final_val_loss = evaluate(model, val_rows, args.batch_size, pad_id, args.rps_weight)
     if not math.isfinite(final_val_loss):
         raise ValueError("nonfinite final validation loss; refusing to save unusable adapter")
     print(f"final val loss: {final_val_loss:.4f}")

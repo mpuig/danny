@@ -346,6 +346,8 @@ def load_training_rows(path: str | Path, renderer_version: str | None = None,
                     "task": example.source, "id": f"{example.id}/view/{index}", "example_id": example.id,
                     "renderer_version": version, "readout_version": readout_version,
                     "weight": 1 / len(views), "leakage_keys": example.leakage_keys,
+                    # joint distribution over ordered levels; eligible for ordinal losses
+                    "ordinal": example.question.type == "score" and readout_version == LETTER_READOUT,
                 })
     else:
         if readout_version != LETTER_READOUT:
@@ -366,7 +368,7 @@ def load_training_rows(path: str | Path, renderer_version: str | None = None,
                 output.append({
                     **row, "target": normalize_target(row["target"], len(labels)),
                     "id": f"{path}:{number}", "renderer_version": LEGACY_V0,
-                    "readout_version": LETTER_READOUT, "weight": 1.0,
+                    "readout_version": LETTER_READOUT, "weight": 1.0, "ordinal": False,
                     "leakage_keys": {content_key(state)},
                 })
             except (KeyError, IndexError, TypeError, ValueError) as exc:
