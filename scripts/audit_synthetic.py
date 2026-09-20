@@ -135,6 +135,8 @@ def main() -> None:
         "failures": failures,
     }
     print(json.dumps(report, indent=2))
+    if failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

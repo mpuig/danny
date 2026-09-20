@@ -238,3 +238,37 @@ Temperatures were refitted for this adapter on the calibration partition
 (data/runs/synth-rps-v1/temperature.json) against a combined-corpus manifest
 whose development/calibration/test partitions are byte-identical to kev-v1.
 
+## 23. Review corrections to the synthetic/RPS arc (2026-09-20)
+
+An internal review of decisions 20-22 raised five issues; dispositions:
+
+1. **Non-ordinal synthetic Score rubrics (confirmed).** Some generated Score
+   questions present categorical outcomes as levels (verified example:
+   resolution outcomes as a 6-level "scale"). The loader marks every
+   letter-readout Score row ordinal, so RPS trained arbitrary distances on
+   those rows in the combined arm. Scope: 579/2,003 synthetic rows are Score
+   with unknown contamination fraction; the RPS validation itself is
+   unaffected (both replications trained kev-only, whose Score sources are
+   genuinely ordinal). The generator now requires and records a declared
+   `scale_dimension` and forbids categorical levels; existing synthetic Score
+   rows need an ordinality audit before the next data cycle.
+2. **Synthetic evaluation measures teacher agreement (acknowledged; fidelity
+   added).** Soft-distribution fidelity now sits beside argmax agreement:
+   the selected adapter improved mean JS divergence to the teacher's full
+   distributions (0.187 -> 0.117 nats) and Noul MAE (0.289 -> 0.222), so the
+   agreement gain did not come from discarding uncertainty. Outcome
+   correctness still requires the independently adjudicated benchmark.
+3. **Overconfidence filter refined (confirmed).** A teacher confidently
+   selecting an explicit cannot-determine option is correct uncertainty
+   handling. The filter now exempts such rows (29 of the original 232;
+   203 dropped); the queued retrain uses the corrected corpus.
+4. **Promotion evidence is a tradeoff, not a clean win (acknowledged).** The
+   development NLL interval crosses zero, and the rubric diagnostic pairs
+   +3 correct answers with worse NLL/Brier. Decision 22 stands as a
+   user-directed selection with these limits; seed evaluations and the
+   filtered retrain are in flight.
+5. **Reproducibility gaps fixed.** audit_synthetic now exits nonzero on FAIL;
+   the teacher collector validates resumed rows against the requested teacher
+   and current scenario content, and aborts if the API reports a different
+   version mid-collection.
+

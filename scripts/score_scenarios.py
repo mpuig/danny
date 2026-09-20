@@ -57,14 +57,30 @@ def main() -> None:
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    done: set[str] = set()
-    if args.resume and out.exists():
-        done = {row["id"] for row in read_jsonl(out)}
-    elif out.exists():
-        raise SystemExit(f"{out} exists; use --resume or a new path")
-
     key = api_key()
     rows = list(read_jsonl(args.scenarios))
+    scenario_by_id = {row["id"]: row for row in rows}
+
+    done: set[str] = set()
+    if args.resume and out.exists():
+        for existing in read_jsonl(out):
+            teacher = existing.get("provenance", {}).get("teacher", {})
+            if teacher.get("requested") != args.teacher:
+                raise SystemExit(
+                    f"{out}: existing row {existing['id']} was scored with teacher "
+                    f"{teacher.get('requested')!r}, not {args.teacher!r}; use a new path")
+            if teacher.get("reported") not in ("", args.teacher):
+                raise SystemExit(
+                    f"{out}: existing row {existing['id']} reports teacher "
+                    f"{teacher.get('reported')!r}; refusing to mix versions")
+            source = scenario_by_id.get(existing["id"])
+            if source is None or source["state"] != existing["state"]:
+                raise SystemExit(
+                    f"{out}: existing row {existing['id']} does not match the current "
+                    f"scenario file; inputs changed since the earlier run")
+            done.add(existing["id"])
+    elif out.exists():
+        raise SystemExit(f"{out} exists; use --resume or a new path")
     reported_models: set[str] = set()
     scored, agree = 0, 0
 
@@ -75,6 +91,10 @@ def main() -> None:
             question = Question(**row["question"])
             response = systemone(key, row["state"], question, model=args.teacher)
             reported = str(response.get("model", ""))
+            if reported and reported != args.teacher:
+                raise SystemExit(
+                    f"teacher reported {reported!r} for a request pinned to "
+                    f"{args.teacher!r}; aborting to keep the collection single-version")
             reported_models.add(reported)
             answer = response["answers"]["q"]
             target = teacher_target(question, answer)

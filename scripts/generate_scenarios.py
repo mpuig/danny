@@ -230,9 +230,14 @@ def question_spec(cell: dict) -> str:
                 f'{cell["n_options"]} options, snake_case names, mutually distinguishable descriptions')
     if cell["primitive"] == "score":
         return ('{"type": "score", "instructions": "<the question>", "criteria": '
-                f'["<level 0>", ...]}} with EXACTLY {cell["n_levels"]} ordered levels low to high; '
-                "each level describes a concrete situation, never intensity words like "
-                "mildly/moderately/very")
+                f'["<level 0>", ...]}} with EXACTLY {cell["n_levels"]} ordered levels low to high. '
+                "The levels MUST be increasing positions of ONE monotonic quantity (severity, "
+                "satisfaction, completeness, risk, urgency...). Distinct categorical outcomes "
+                "(different resolutions, different products, different teams) are NOT a scale - "
+                "never present categories as score levels. Each level describes a concrete "
+                "situation, never intensity words like mildly/moderately/very. Alongside "
+                "`expected`, also return `scale_dimension`: the single quantity that increases "
+                "across your levels, in a few words")
     return ('{"type": "noul", "instructions": "<one yes/no question>", '
             '"criteria": {"true": "<what yes means>", "false": "<what no means>"}}')
 
@@ -427,6 +432,8 @@ def main() -> None:
                                 "temperature": args.temperature,
                                 "expected": item["expected"],
                                 "rationale": str(item.get("rationale", "")),
+                                **({"scale_dimension": str(item["scale_dimension"])}
+                                   if job["cell"]["primitive"] == "score" else {}),
                                 **({"changed_fact": str(payload["raw"].get("changed_fact", ""))}
                                    if job["pair"] else {}),
                             },

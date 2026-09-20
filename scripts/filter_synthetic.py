@@ -17,9 +17,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from jev.data import sha256_file
+
+# A confident answer that ITSELF expresses "cannot be determined" is correct
+# behavior on a missing-evidence scenario, not teacher overconfidence.
+UNKNOWN_OPTION = re.compile(
+    r"unknown|cannot|can_not|insufficient|unclear|undetermin|not_determin|"
+    r"indetermin|unable_to|no_evidence|not_enough|unverifiable|other|none",
+    re.IGNORECASE,
+)
+
+
+def confident_in_unknown(row: dict) -> bool:
+    question = row["question"]
+    if question["type"] != "choice":
+        return False  # noul/score have no explicit-unknown outcome
+    options = list(question["criteria"])
+    argmax = max(range(len(row["target"])), key=row["target"].__getitem__)
+    return bool(UNKNOWN_OPTION.search(options[argmax]))
 
 
 def main() -> None:
@@ -31,12 +49,16 @@ def main() -> None:
     ap.add_argument("--max-prob", type=float, default=0.99)
     args = ap.parse_args()
 
-    kept, dropped = [], []
+    kept, dropped, exempted = [], [], []
     for line in open(args.synthetic):
         row = json.loads(line)
         cell = row["provenance"]["cell"]
         if cell["ambiguity"] == args.ambiguity and max(row["target"]) >= args.max_prob:
-            dropped.append(row["id"])
+            if confident_in_unknown(row):
+                exempted.append(row["id"])
+                kept.append(line)
+            else:
+                dropped.append(row["id"])
         else:
             kept.append(line)
 
@@ -49,6 +71,7 @@ def main() -> None:
 
     print(json.dumps({
         "dropped": len(dropped),
+        "exempted_confident_in_unknown": len(exempted),
         "kept_synthetic": len(kept),
         "combined_rows": sum(1 for _ in out.open()),
         "criteria": {"ambiguity": args.ambiguity, "max_prob_at_or_above": args.max_prob},
