@@ -272,3 +272,24 @@ An internal review of decisions 20-22 raised five issues; dispositions:
    and current scenario content, and aborts if the API reports a different
    version mid-collection.
 
+## 24. Seed replication closes decision 22's gate; rubric-accuracy claims retracted
+
+Seeds 7 and 123 of the selected configuration (identical data/protocol) replicate
+the core evidence: development accuracy 0.814/0.819/0.817 and NLL 0.431/0.436/0.435
+across seeds 42/7/123, and the held-out synthetic gain at 0.707/0.707/0.727 versus
+the 0.539 baseline. Those claims are seed-robust.
+
+Rubric accuracy is not: 0.833/0.690/0.738 across the same three seeds. All
+rubric-accuracy comparisons made on the 42-case diagnostic — including decision
+22's 83.3% and the RPS arm's earlier +7.1-point reading — are within seed noise
+and are retracted as evidence. The diagnostic remains a regression canary only;
+an independently reviewed, larger holdout (already gated) is now demonstrably
+required for any rubric-transfer claim.
+
+The filtered-corpus arm (filter v2) posted the family's best in-family numbers
+(dev accuracy 0.820, NLL 0.428, ECE 0.020) with synthetic gains retained and
+rubric NLL moved toward baseline (0.604 -> 0.559 vs 0.538; interval includes
+zero). Selection between it and the current adapter is deferred to the corpus-v3
+comparison (additionally excluding the 312 categorical-Score rows from decision
+23.1), so the configuration changes at most once more.
+
