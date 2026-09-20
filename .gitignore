@@ -1,5 +1,8 @@
 data/
-adapters/
+adapters/*
+!adapters/qwen3-0.6b-structured-v1-rps
+!adapters/qwen3-0.6b-structured-v1-synth
+!adapters/qwen3-0.6b-structured-v1-synth-rps
 .env
 __pycache__/
 .venv/
