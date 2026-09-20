@@ -1,0 +1,1 @@
+{"fine_tune_type": "lora", "num_layers": 30, "lora_parameters": {"rank": 16, "scale": 20.0, "dropout": 0.0, "keys": ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj"]}, "model": "HuggingFaceTB/SmolLM2-135M", "renderer_version": "structured-v1", "readout_version": "letters-v1"}

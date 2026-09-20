@@ -56,7 +56,9 @@ new evidence or options. Question independence is not statistical independence.
 
 The current scope is English text and JSON state, narrow semantic judgments, and
 small backbones. SmolLM2-135M and Qwen3-0.6B have completed structured-v1 training and
-evaluation. Qwen at learning rate 1e-5 is the selected development configuration;
+evaluation. Qwen trained on the combined kev+synthetic corpus with the ordinal RPS loss
+(`qwen3-0.6b-structured-v1-synth-rps`) is the selected development configuration
+(decision 22); the earlier LR-1e-5 run remains the kev-only control;
 SmolLM is the smaller comparison. SmolLM3-3B adapters are historical legacy-v0 runs,
 not the current controlled baseline. No structured-v1 3B run has been completed.
 

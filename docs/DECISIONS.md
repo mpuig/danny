@@ -217,3 +217,24 @@ report actual model identity and measured performance, and do not equate these b
 with production security or demonstrated workflow safety.
 
 See [Experiments](EXPERIMENTS.md) for measured results and remaining evidence gates.
+
+## 22. Select the synth+RPS Qwen configuration (user-directed promotion)
+
+`qwen3-0.6b-structured-v1-synth-rps` (kev train + 2,003 jev-1.13.0-scored synthetic
+questions, ordinal RPS loss at weight 1.0, LR 1e-5, seed 42) replaces the kev-only
+LR-1e-5 run as the selected development configuration. Evidence: it retains the
+synthetic out-of-family gains (+16.8 accuracy points on the held-out synthetic
+evaluation, 95% grouped interval [+10.8, +22.5]; NLL -0.414), ties the best rubric
+accuracy (83.3%), reaches the family's best development NLL (0.431), and shows no
+significant in-family regression. The RPS effect replicated on SmolLM2-135M with
+significant across-the-board improvements (accuracy +3.0 points [+0.9, +5.2],
+NLL -0.059, Brier -0.029), though there the score-MAE change itself was within
+noise -- the loss generalizes; its expression differs by backbone.
+
+Open gates, explicitly not yet met: seed replication of the combined run; the
+residual rubric-NLL elevation from synthetic data (filter teacher-overconfident
+missing-evidence rows and retrain); the reserved Kev test remains untouched.
+Temperatures were refitted for this adapter on the calibration partition
+(data/runs/synth-rps-v1/temperature.json) against a combined-corpus manifest
+whose development/calibration/test partitions are byte-identical to kev-v1.
+
