@@ -78,8 +78,8 @@ def main():
     readout = resolve_readout(args.readout, args.adapter)
     # Reject unsupported supervision/readouts before loading weights.
     for example in examples:
-        if example.target_origin != "gold" or sum(p == 1 for p in example.target) != 1:
-            parser.error("outcome evaluation requires one-hot gold targets, not teacher distributions")
+        if sum(p == 1 for p in example.target) != 1 or any(0 < p < 1 for p in example.target):
+            parser.error("outcome evaluation requires one-hot targets, not soft distributions")
         render_views(example.state, example.question, version, readout)
     if args.n and args.n < len(examples):
         examples = random.Random(args.seed).sample(examples, args.n)
@@ -125,7 +125,7 @@ def main():
         "readout_version": engine.readout_version,
         "confidence_scheme": engine.confidence_scheme,
         "temperature_sha256": sha256_file(args.temperature) if args.temperature else None,
-        "data_sha256": data_hash,
+        "target_origins": sorted({e.target_origin for e in examples}), "data_sha256": data_hash,
         "adapter_sha256": adapter_hash,
         **provenance,
         "overall_micro": summarize_rows(rows),
