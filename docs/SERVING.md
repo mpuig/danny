@@ -23,15 +23,15 @@ uv run python scripts/serve.py \
 ```fish
 uv run python scripts/serve.py \
   --model Qwen/Qwen3-0.6B \
-  --adapter adapters/qwen3-0.6b-structured-v1-synth-rps \
+  --adapter adapters/qwen3-0.6b-structured-v1-synthfiltered-rps \
   --port 8400
 ```
 
-Use the **`synth-rps` Qwen adapter** (selected, decision 22): 81.4% development
-accuracy with the family's best development NLL (0.431), +16.8 points on the
-held-out synthetic evaluation, and 83.3% on the rubric diagnostic. Its fitted
-temperature file is `data/runs/synth-rps-v1/temperature.json`. The `lr1e-5`
-kev-only run (81.3%) remains the experiment control. These results do not
+Use the **`synthfiltered-rps` Qwen adapter** (selected and frozen, decision 25):
+82.0% development accuracy, the family's best development NLL (0.428) and ECE
+(0.020), with the held-out synthetic gains retained. Its fitted temperature file
+is `data/runs/filtered-v2/temperature.json`. The `lr1e-5` kev-only run (81.3%)
+remains the experiment control. These results do not
 guarantee correct answers on your tickets; see
 [Experiments](EXPERIMENTS.md) for the evaluation scope.
 
@@ -162,7 +162,7 @@ reusing its port, or choose an unused port.
 | Variant | Matching backbone | Adapter path | Intended use |
 |---|---|---|---|
 | SmolLM v1 | `HuggingFaceTB/SmolLM2-135M` | `adapters/smollm2-135m-structured-v1` | Smaller trained baseline |
-| Qwen v1, synth+RPS | `Qwen/Qwen3-0.6B` | `adapters/qwen3-0.6b-structured-v1-synth-rps` | Selected configuration (decision 22) |
+| Qwen v1, filtered synth+RPS | `Qwen/Qwen3-0.6B` | `adapters/qwen3-0.6b-structured-v1-synthfiltered-rps` | Selected configuration, frozen (decision 25) |
 | Qwen v1, LR 1e-5 | `Qwen/Qwen3-0.6B` | `adapters/qwen3-0.6b-structured-v1-lr1e-5` | kev-only control |
 | Qwen v1, LR 5e-5 | `Qwen/Qwen3-0.6B` | `adapters/qwen3-0.6b-structured-v1` | Regression/control run, not the recommended adapter |
 | SmolLM candidate pilot | `HuggingFaceTB/SmolLM2-135M` | `adapters/smollm2-135m-readout-pilot-candidate-v1` | Experimental independent Score levels and wide Choice |
@@ -216,7 +216,7 @@ Use `--temperature` to load a fitted probability-scaling artifact:
 ```fish
 uv run python scripts/serve.py \
   --model Qwen/Qwen3-0.6B \
-  --adapter adapters/qwen3-0.6b-structured-v1-synth-rps \
+  --adapter adapters/qwen3-0.6b-structured-v1-synthfiltered-rps \
   --temperature data/runs/followup-v1/qwen3-temperature.json \
   --port 8400
 ```
@@ -241,7 +241,7 @@ combined with it; a matching artifact would need to be fitted separately.
 ```fish
 uv run python scripts/serve.py \
   --model Qwen/Qwen3-0.6B \
-  --adapter adapters/qwen3-0.6b-structured-v1-synth-rps \
+  --adapter adapters/qwen3-0.6b-structured-v1-synthfiltered-rps \
   --precision float32 --execution-mode shared \
   --port 8400
 ```

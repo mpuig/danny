@@ -4,11 +4,15 @@ data/experiments/*
 !data/experiments/synth-rps-corpus/
 data/experiments/synth-rps-corpus/*
 !data/experiments/synth-rps-corpus/manifest.json
+!data/experiments/synthfiltered-corpus/
+data/experiments/synthfiltered-corpus/*
+!data/experiments/synthfiltered-corpus/manifest.json
 adapters/*
 !adapters/qwen3-0.6b-structured-v1-rps
 !adapters/qwen3-0.6b-structured-v1-synth
 !adapters/qwen3-0.6b-structured-v1-synth-rps
 !adapters/smollm2-135m-structured-v1-rps
+!adapters/qwen3-0.6b-structured-v1-synthfiltered-rps
 .env
 __pycache__/
 .venv/

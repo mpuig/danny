@@ -1,0 +1,30 @@
+{
+  "format_version": 1,
+  "recommended_renderer": "structured-v1",
+  "matching_policy": "group+normalized-content-v1",
+  "split_policy": "train = kev-v1 train + synthetic-fireworks-v1 after filter v2 (203 teacher-overconfident missing-evidence rows dropped, 29 confident-explicit-unknown rows exempted; scripts/filter_synthetic.py); development/calibration/test are byte-identical copies of kev-v1",
+  "derived_from": {
+    "kev_v1_manifest_sha256": "09b0d90ac5113b6466a176becbb3067eda62dd420a027544eb84f03f987ef3e8",
+    "synthetic_examples_sha256": "3fe33f1478d9b3b3e12b37fc7554736329adf3ed401daef8764b77bbd1fd24a7"
+  },
+  "seed": 42,
+  "max_options": 26,
+  "files": {
+    "train.jsonl": {
+      "sha256": "76da7ba9e9db982959dbffd3afb5da947fe41093a34822db99e7949407e872dc",
+      "rows": 10569
+    },
+    "development.jsonl": {
+      "sha256": "21ac3970bf56862e40f0e816d399a424c9877db820be2a58c81e2a40345e8ce9",
+      "rows": 1128
+    },
+    "calibration.jsonl": {
+      "sha256": "9cb943edb80814ef929aa763a5c4a45d31e1ec0bd1006dc5cc8dde662913d141",
+      "rows": 1103
+    },
+    "test.jsonl": {
+      "sha256": "f7447ab1d06a0b741adf4b614324ba12644d97cc65e827b4681ad53c772976dd",
+      "rows": 1048
+    }
+  }
+}

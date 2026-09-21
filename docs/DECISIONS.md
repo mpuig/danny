@@ -293,3 +293,27 @@ zero). Selection between it and the current adapter is deferred to the corpus-v3
 comparison (additionally excluding the 312 categorical-Score rows from decision
 23.1), so the configuration changes at most once more.
 
+## 25. Re-select the filtered configuration; freeze the recipe
+
+`qwen3-0.6b-structured-v1-synthfiltered-rps` replaces the synth+RPS run as the
+selected configuration, on the three-candidate comparison under the frozen
+protocol: best development NLL (0.428) and ECE (0.020), best rubric NLL (0.559,
+nearest the 0.538 kev-only control), held-out synthetic gains fully retained
+(0.711 vs 0.539 untuned-baseline agreement), and the most defensible corpus
+(teacher-overconfident missing-evidence rows removed, confident-explicit-unknown
+rows exempted). Rubric accuracy was excluded from this evidence per decision 24.
+The corpus-v3 arm (additionally excluding 312 non-ordinal Score rows) was
+rejected: identical dev score-slice performance, worse ECE/rubric NLL, and a
+synthetic-coverage cost — the ordinality flaw is real as supervision semantics
+but empirically harmless to this recipe; the generation fix stands for future
+data only.
+
+**The recipe is frozen as of this decision**: corpus = kev-v1 train + filter-v2
+synthetic (scripts/filter_synthetic.py, sha-verified); loss = readout CE +
+RPS weight 1.0 on ordinal rows; LR 1e-5, batch 8, one epoch, max-seq 1536,
+letters-v1 readout, structured-v1 renderer; per-primitive temperatures fitted on
+the calibration partition (data/runs/filtered-v2/temperature.json; fitted
+temperatures 1.02-1.16, consistent with the adapter's low raw ECE). Changes to
+any element require a new decision entry. The freeze unlocks the one-shot
+reserved Kev test and the scale-up comparison (MiniCPM5-2B-base vs SmolLM3-3B).
+
