@@ -317,9 +317,21 @@ temperatures 1.02-1.16, consistent with the adapter's low raw ECE). Changes to
 any element require a new decision entry. The freeze unlocks the one-shot
 reserved Kev test and the scale-up comparison (MiniCPM5-2B-base vs SmolLM3-3B).
 
-## 26. DRAFT — targeted second-pass fine-tuning on weakness clusters (not yet run)
+## 26. Targeted second-pass fine-tuning on weakness clusters — executed, null
 
-Status: **drafted, awaiting go.** Motivated by kev's 2026-09-21 result (a short
+Status: **executed 2026-09-21 on the MiniCPM scale-up adapter; result null; not adopted.**
+Outcome: 713 guarded patch rows (80% ordinality from the hardened generator, up
+from 46%; 122 non-ordinal + 77 overconfident rows dropped, zero leakage), warm-started
+patch pass at LR 5e-6 for 179 steps. Every pre/post interval includes zero:
+dev accuracy +0.4pt [-0.6, +1.6], score accuracy 0.673 -> 0.695 with MAE flat
+(0.435 -> 0.443), confident errors 2.17% -> 2.07%, synthetic-eval NLL -0.035
+[-0.078, +0.007]. Interpretation: kev's technique halved confident errors from
+8.7%; ours started at 2.2% with dev ECE 0.018 - there was little left for a
+light-touch patch to fix. No harm either: the pre-registered overfitting risk
+did not materialize. The unpatched adapter remains the MiniCPM reference; the
+patch adapter is versioned as the experimental record. Original design below.
+
+Original draft: Motivated by kev's 2026-09-21 result (a short
 second training pass on generated failure-cluster cases halved confident errors
 8.7% -> 4.0% and added 1.5 test points) and by our own final-test profile:
 Score at 50.0% accuracy with the model itself aware of it (only 1 of 160 score

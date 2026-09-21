@@ -14,6 +14,7 @@ adapters/*
 !adapters/smollm2-135m-structured-v1-rps
 !adapters/qwen3-0.6b-structured-v1-synthfiltered-rps
 !adapters/minicpm5-2b-structured-v1-synthfiltered-rps
+!adapters/minicpm5-2b-sfr-patch1
 .env
 __pycache__/
 .venv/

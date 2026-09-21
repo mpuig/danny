@@ -369,3 +369,13 @@ latency at 2.5B is unmeasured, and the reserved-test equivalent for this model
 does not exist (the old partition is spent). Adapter:
 adapters/minicpm5-2b-structured-v1-synthfiltered-rps; reports data/runs/minicpm-v1/.
 
+## 12. Patch pass on the scale-up adapter (2026-09-21): null
+
+Decision 26 executed on MiniCPM: 713 guarded patch rows (fresh generator now 80%
+ordinal vs 46% pre-hardening — the scale_dimension requirement works), warm-started
+LoRA continuation at LR 5e-6, 179 steps. All pre/post intervals include zero
+(dev +0.4pt [-0.6,+1.6]; score MAE flat; confident errors 2.17% -> 2.07%;
+synthetic NLL -0.035 [-0.078,+0.007]). The technique that halved kev's 8.7%
+confident errors found nothing to halve at our 2.2% starting point. Not adopted;
+no regression. Adapter versioned as minicpm5-2b-sfr-patch1; reports data/runs/patch-v1/.
+
