@@ -338,6 +338,13 @@ def make_handler(backend, *, max_body_bytes=262144, io_timeout=10.0):
             self.close_connection = True
             data = json.dumps(payload, allow_nan=False).encode()
             try:
+                # _DeadlineReader may have shrunk the socket timeout to the read
+                # deadline's remainder; the response gets its own full budget so
+                # a completed inference is never dropped by a slow-reading client.
+                self.request.settimeout(io_timeout)
+            except OSError:
+                pass
+            try:
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))

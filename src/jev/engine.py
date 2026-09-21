@@ -423,10 +423,8 @@ class SystemOneEngine:
 
     # -- calibration -----------------------------------------------------------
 
-    def _prior(self, q: Question) -> list[float]:
-        """The model's label prior for this question, estimated as the mean
-        answer distribution over content-free states. Cached per question."""
-        key = hashlib.sha256(
+    def _prior_key(self, q: Question) -> str:
+        return hashlib.sha256(
             dumps(
                 [
                     self.renderer_version,
@@ -435,6 +433,11 @@ class SystemOneEngine:
                 ]
             ).encode()
         ).hexdigest()
+
+    def _prior(self, q: Question) -> list[float]:
+        """The model's label prior for this question, estimated as the mean
+        answer distribution over content-free states. Cached per question."""
+        key = self._prior_key(q)
         if key in self._prior_cache:
             value = self._prior_cache.pop(key)
             self._prior_cache[key] = value
@@ -481,6 +484,7 @@ class SystemOneEngine:
             raise RequestLimitError(f"state exceeds {limits.max_state_tokens} tokens")
         self._request_views = self._request_rendered_tokens = 0
         try:
+            self._preadmit(state, questions, limits)
             raw = self._raw_distributions(state, questions)
             answers: dict[str, Answer] = {}
             for qid, q in questions.items():
@@ -494,6 +498,32 @@ class SystemOneEngine:
             return answers
         finally:
             del self._request_views, self._request_rendered_tokens
+
+    def _preadmit(self, state, questions, limits):
+        """Reject an over-budget request before any model forward runs.
+
+        Budget semantics are unchanged - cold contextual priors still share the
+        request's view budget - but the decision moves ahead of the compute, so
+        a request that cannot finish never pays for the passes it made first,
+        and admission no longer depends on whether an earlier request happened
+        to warm the prior cache mid-flight."""
+        readout = getattr(self, "readout_version", LETTER_READOUT)
+        prospective = 0
+        for q in questions.values():
+            try:
+                mains = len(render_views(state, q, self.renderer_version, readout))
+            except ValueError as exc:
+                raise RequestValidationError(str(exc)) from exc
+            prospective += mains
+            if self.contextual_calibration and self._prior_key(q) not in self._prior_cache:
+                # content-free prior passes render the same per-question view count
+                prospective += mains * len(_CONTENT_FREE_STATES)
+        if prospective > limits.max_views:
+            raise RequestLimitError(
+                f"request needs {prospective} model views (questions plus cold "
+                f"calibration priors), over the {limits.max_views} limit; warm the "
+                "priors, disable contextual correction, or raise max_views"
+            )
 
     def _raw_distributions(self, state, questions):
         readout = getattr(self, "readout_version", LETTER_READOUT)

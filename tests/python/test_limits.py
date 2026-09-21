@@ -67,7 +67,9 @@ class EngineLimitTests(unittest.TestCase):
         )
         with self.assertRaises(RequestLimitError):
             engine.ask("s", {"q": Question("noul", "?")})
-        self.assertEqual(len(calls), 3)
+        # cold priors still count against the request budget, but the rejection
+        # now happens at admission: no forward pass is paid for a doomed request
+        self.assertEqual(len(calls), 0)
         self.assertFalse(hasattr(engine, "_request_views"))
         engine.contextual_calibration = False
         self.assertIn("q", engine.ask("s", {"q": Question("noul", "?")}))
