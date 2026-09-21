@@ -132,6 +132,9 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--max-seq", type=int, default=768)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--init-adapter", default=None,
+                    help="warm-start the LoRA parameters from an existing adapter "
+                         "directory (a patch pass continues that adapter's training)")
     ap.add_argument("--checkpoint-every", type=int, default=0,
                     help="save trainable params to <out>-checkpoint every N steps (0=off)")
     ap.add_argument("--rps-weight", type=float, default=0.0,
@@ -167,6 +170,18 @@ def main() -> None:
     model.freeze()
     num_layers = len(model.layers)
     linear_to_lora_layers(model, num_layers, LORA_PARAMS)
+    if args.init_adapter:
+        init_config = json.loads((Path(args.init_adapter) / "adapter_config.json").read_text())
+        if (init_config.get("renderer_version") != renderer_version
+                or init_config.get("readout_version") != args.readout
+                or init_config.get("lora_parameters") != LORA_PARAMS):
+            ap.error("--init-adapter renderer/readout/LoRA config does not match this run")
+        model.load_weights(str(Path(args.init_adapter) / "adapters.safetensors"), strict=False)
+        provenance["init_adapter"] = {
+            "path": args.init_adapter,
+            "adapters_sha256": sha256_file(Path(args.init_adapter) / "adapters.safetensors"),
+        }
+        print(f"warm-started LoRA parameters from {args.init_adapter}")
     n_trainable = sum(v.size for _, v in tree_flatten(model.trainable_parameters()))
     print(f"LoRA on {num_layers} layers, {n_trainable / 1e6:.2f}M trainable params")
 
