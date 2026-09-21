@@ -132,6 +132,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--max-seq", type=int, default=768)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--checkpoint-every", type=int, default=0,
+                    help="save trainable params to <out>-checkpoint every N steps (0=off)")
     ap.add_argument("--rps-weight", type=float, default=0.0,
                     help="weight of the Ranked Probability Score term on ordinal (score) rows")
     ap.add_argument("--readout", choices=READOUT_VERSIONS, default=LETTER_READOUT)
@@ -193,6 +195,13 @@ def main() -> None:
             if step % 25 == 0:
                 rate = step / (time.time() - t0)
                 print(f"step {step}  loss(ema) {ema:.4f}  {rate:.2f} it/s", flush=True)
+            if args.checkpoint_every and step % args.checkpoint_every == 0:
+                ckpt = Path(str(out) + "-checkpoint")
+                ckpt.mkdir(parents=True, exist_ok=True)
+                mx.save_safetensors(str(ckpt / "adapters.safetensors"),
+                                    dict(tree_flatten(model.trainable_parameters())))
+                (ckpt / "checkpoint.json").write_text(json.dumps(
+                    {"step": step, "examples_seen": examples_seen, "ema_loss": ema}))
             if args.max_steps and step >= args.max_steps:
                 break
         if args.max_steps and step >= args.max_steps:
