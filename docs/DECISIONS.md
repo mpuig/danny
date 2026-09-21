@@ -317,3 +317,37 @@ temperatures 1.02-1.16, consistent with the adapter's low raw ECE). Changes to
 any element require a new decision entry. The freeze unlocks the one-shot
 reserved Kev test and the scale-up comparison (MiniCPM5-2B-base vs SmolLM3-3B).
 
+## 26. DRAFT — targeted second-pass fine-tuning on weakness clusters (not yet run)
+
+Status: **drafted, awaiting go.** Motivated by kev's 2026-09-21 result (a short
+second training pass on generated failure-cluster cases halved confident errors
+8.7% -> 4.0% and added 1.5 test points) and by our own final-test profile:
+Score at 50.0% accuracy with the model itself aware of it (only 1 of 160 score
+answers exceeds 0.9 confidence), and confident errors of 4.8% at t>=0.9 overall.
+
+Design (single decision-gated experiment; the frozen recipe is unchanged and the
+result, if adopted, becomes a new recipe version by decision entry):
+
+1. **Data**: two generated batches scored by pinned jev-1.13.0 —
+   (a) ~600 ordinal-verified Score scenarios (post-hardening generator: declared
+   scale_dimension; ordinality-audited before scoring); (b) ~300 evidence-removal
+   pairs: for existing clear-evidence scenarios, a counterfactual with the
+   deciding evidence deleted, both sides teacher-scored, so supervision carries
+   "confidence collapses when the evidence leaves" (Nimble's contrastive idea
+   fused with our teacher pipeline). Fresh seed; leakage-checked against all
+   existing partitions and the frozen corpus.
+2. **Training**: short patch pass on top of the frozen adapter
+   (qwen3-0.6b-structured-v1-synthfiltered-rps), one epoch over the patch set
+   only, LR 5e-6 (half the recipe rate; a patch, not a retrain), batch 8,
+   max-seq 1536, RPS weight 1.0, seed 42, checkpointing on.
+3. **Evaluation**: full battery vs the frozen baseline — development, held-out
+   synthetic eval, confident-error rates, risk-coverage — grouped bootstrap.
+   Success = score-slice improvement (MAE or accuracy) with a CI excluding zero
+   AND no significant regression on any other slice; secondary target: reduced
+   confident-error rate. The spent test is not consulted.
+4. **Caveats recorded in advance**: patch passes can overfit the patch
+   distribution (the synthetic eval guards the synthetic side; development
+   guards in-family); the evidence-removal supervision inherits the teacher's
+   known missing-evidence overconfidence, mitigated by the filter-v2 criteria
+   applied to the patch batch as well.
+

@@ -43,6 +43,19 @@ def summarize_rows(rows: list[dict]) -> dict:
             np.array([r["correct"] for r in rows]),
         ),
         "mean_top1_prob": float(np.mean([r["top1_probability"] for r in rows])),
+        # Operational calibration: how often is the model confidently wrong?
+        # (kev reports this as a first-class number; risk-coverage generalizes it.)
+        "confident_errors": {
+            str(t): {
+                "confident": int(sum(1 for r in rows if r["top1_probability"] >= t)),
+                "errors": int(sum(1 for r in rows
+                                  if r["top1_probability"] >= t and not r["correct"])),
+                "rate": (lambda c, e: round(e / c, 4) if c else None)(
+                    sum(1 for r in rows if r["top1_probability"] >= t),
+                    sum(1 for r in rows if r["top1_probability"] >= t and not r["correct"])),
+            }
+            for t in (0.9, 0.95)
+        },
         **({"score_mae": float(np.mean([r["score_error"] for r in rows]))}
            if all(r["primitive"] == "score" for r in rows) else {}),
     }
