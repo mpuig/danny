@@ -198,15 +198,16 @@ def extract_json(text: str) -> dict:
     raise ValueError("unbalanced JSON in generator output")
 
 
-def sample_cell(rng: random.Random) -> dict:
-    primitive = rng.choice(["choice", "score", "noul"])
+def sample_cell(rng: random.Random, force_primitive: str | None = None,
+                force_clear: bool = False) -> dict:
+    primitive = force_primitive or rng.choice(["choice", "score", "noul"])
     cell = {
         "domain": rng.choice(DOMAINS),
         "length": rng.choice(list(LENGTH_TIERS)),
         "state_format": rng.choice(list(STATE_FORMATS)),
         "primitive": primitive,
         "style": rng.choice(list(QUESTION_STYLES)),
-        "ambiguity": rng.choice(list(AMBIGUITY)),
+        "ambiguity": "clear" if force_clear else rng.choice(list(AMBIGUITY)),
         "register": rng.choice(list(REGISTERS)),
         "evidence_position": rng.choice(EVIDENCE_POSITIONS),
         "spice": rng.randrange(10**9),
@@ -254,7 +255,7 @@ def answer_constraint(cell: dict) -> str:
     return f"Design the evidence so the correct answer is {'yes' if cell['answer_slot'] else 'no'}.\n"
 
 
-def scenario_prompt(cell: dict, pair: bool, n_questions: int) -> str:
+def scenario_prompt(cell: dict, pair, n_questions: int) -> str:
     length_desc, _ = LENGTH_TIERS[cell["length"]]
     base = (
         f"Domain: {cell['domain']}.\n"
@@ -271,13 +272,25 @@ def scenario_prompt(cell: dict, pair: bool, n_questions: int) -> str:
         f"Variety seed: {cell['spice']}. Let it influence names, numbers, and the sub-topic, "
         f"so repeated calls differ.\n"
     )
-    if pair:
+    if pair == "flip":
         return base + (
             "\nCreate a CONTRASTIVE PAIR: `base` with one question, and `counterfactual` "
             "identical except for one changed fact (edit at most 8 words of the state) that "
             "flips the expected answer. Same question in both. Return: "
             '{"base": {"state": ..., "question": ..., "expected": ..., "rationale": ...}, '
             '"counterfactual": {same shape}, "changed_fact": "<what changed>"}'
+        )
+    if pair == "evidence_removal":
+        return base + (
+            "\nCreate an EVIDENCE-REMOVAL PAIR: `base` must contain clear deciding evidence "
+            "for its `expected` answer. `counterfactual` is the same state with that deciding "
+            "evidence REMOVED or made unavailable (delete or genuinely obscure those facts; do "
+            "NOT add contrary evidence, and keep everything else identical). Same question in "
+            "both. For the counterfactual, `expected` is your best guess from what remains, and "
+            "its `rationale` must say what was removed and why the honest answer is now "
+            "uncertain. Return: "
+            '{"base": {"state": ..., "question": ..., "expected": ..., "rationale": ...}, '
+            '"counterfactual": {same shape}, "removed_fact": "<what was removed>"}'
         )
     if n_questions == 1:
         return base + '\nReturn: {"state": ..., "question": ..., "expected": ..., "rationale": ...}'
@@ -322,6 +335,9 @@ def main() -> None:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--temperature", type=float, default=0.9)
     ap.add_argument("--pair-fraction", type=float, default=0.2)
+    ap.add_argument("--pair-kind", choices=["flip", "evidence_removal"], default="flip")
+    ap.add_argument("--primitive", choices=["choice", "score", "noul"], default=None,
+                    help="force every scenario to one primitive")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--key-env", default="FIREWORKS_API_KEY")
     ap.add_argument("--resume", action="store_true", help="skip ids already in --out")
@@ -389,8 +405,10 @@ def main() -> None:
         nonlocal index
         while True:
             index += 1
-            cell = sample_cell(rng)
-            pair = rng.random() < args.pair_fraction
+            cell = sample_cell(rng, args.primitive,
+                              force_clear=(args.pair_kind == "evidence_removal"
+                                           and args.pair_fraction >= 1.0))
+            pair = args.pair_kind if rng.random() < args.pair_fraction else False
             n_questions = 1 if pair or cell["length"] == "short" else rng.choice([1, 1, 2, 3])
             suffixes = ["a", "b"] if pair else [f"q{i + 1}" for i in range(n_questions)]
             ids = [f"syn-{args.seed}-{index:05d}-{s}" for s in suffixes]
@@ -435,7 +453,9 @@ def main() -> None:
                                 "rationale": str(item.get("rationale", "")),
                                 **({"scale_dimension": str(item["scale_dimension"])}
                                    if job["cell"]["primitive"] == "score" else {}),
-                                **({"changed_fact": str(payload["raw"].get("changed_fact", ""))}
+                                **({"changed_fact": str(payload["raw"].get("changed_fact",
+                                                    payload["raw"].get("removed_fact", ""))),
+                                    "pair_kind": job["pair"]}
                                    if job["pair"] else {}),
                             },
                         }) + "\n")
