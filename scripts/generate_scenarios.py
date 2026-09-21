@@ -150,6 +150,9 @@ def fireworks_request(key: str, path: str, payload: dict | None = None) -> dict:
             if e.code in RETRYABLE and attempt < 4:
                 time.sleep(2**attempt)
                 continue
+            if e.code in (401, 402, 403, 412):  # account/billing: never retryable
+                body = e.read().decode(errors="replace")[:300]
+                raise SystemExit(f"Fireworks account error HTTP {e.code}: {body}")
             raise
         except (urllib.error.URLError, TimeoutError, OSError):
             if attempt < 4:
@@ -398,7 +401,8 @@ def main() -> None:
                     item["scale_dimension"] = dimension
                 validated.append((state, question, item))
             return job, {"raw": raw, "validated": validated}, None
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as exc:
+            print(f"api failure: HTTP {exc.code}", flush=True)
             return job, None, "api"
         except (KeyError, TypeError, ValueError) as exc:
             bucket = "json" if isinstance(exc, ValueError) and "JSON" in str(exc) else "schema"
