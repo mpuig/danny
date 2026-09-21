@@ -16,13 +16,14 @@ RETRYABLE = (408, 429, 500, 502, 503, 529)
 def api_key() -> str:
     if os.environ.get("TYPESAFE_API_KEY"):
         return os.environ["TYPESAFE_API_KEY"]
-    env = Path(__file__).resolve().parents[2] / ".env"
-    if env.exists():
-        for line in env.read_text().splitlines():
-            line = line.strip()
-            if line.startswith("TYPESAFE_API_KEY="):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise SystemExit("TYPESAFE_API_KEY not found in environment or .env")
+    for env in (Path.home() / ".config" / "jev" / ".env",
+                Path(__file__).resolve().parents[2] / ".env"):
+        if env.exists():
+            for line in env.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("TYPESAFE_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise SystemExit("TYPESAFE_API_KEY not found in environment, ~/.config/jev/.env, or .env")
 
 
 def ask_jev(key: str, state, question, model: str = "jev-latest") -> dict:

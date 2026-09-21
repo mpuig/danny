@@ -333,3 +333,20 @@ unlike on the rubric diagnostic. Score remains the weakest primitive. Reports:
 data/runs/final-test/. Future models cannot be selected on these numbers without
 a fresh reserved partition.
 
+## 10. Risk-coverage on the spent test (analysis only, no new model looks)
+
+scripts/risk_coverage.py over the final-test scaled predictions (top-1
+probability as the automation signal):
+
+| Threshold | Coverage | Risk among automated |
+|---:|---:|---:|
+| 0.80 | 64.8% | 8.4% |
+| 0.90 | 51.3% | 4.8% |
+| 0.95 | 40.3% | 2.8% |
+| 0.99 | 12.3% | 0.8% |
+
+Per primitive at 0.95: Choice 39% coverage / 2.7% risk, Noul 56% / 2.9%,
+Score barely automates (12% coverage at 0.80, 15% risk). Thresholds are
+in-distribution numbers and do not transfer to shifted workloads; confidence
+is top-1 probability, not a probability of correctness.
+

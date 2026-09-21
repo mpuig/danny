@@ -125,13 +125,14 @@ EXPECTED_SPECS = {
 def env_key(name: str) -> str:
     if os.environ.get(name):
         return os.environ[name]
-    env = Path(__file__).resolve().parents[1] / ".env"
-    if env.exists():
-        for line in env.read_text().splitlines():
-            line = line.strip()
-            if line.startswith(f"{name}="):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
-    raise SystemExit(f"{name} not found in environment or .env")
+    for env in (Path.home() / ".config" / "jev" / ".env",
+                Path(__file__).resolve().parents[1] / ".env"):
+        if env.exists():
+            for line in env.read_text().splitlines():
+                line = line.strip()
+                if line.startswith(f"{name}="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise SystemExit(f"{name} not found in environment, ~/.config/jev/.env, or .env")
 
 
 def fireworks_request(key: str, path: str, payload: dict | None = None) -> dict:
