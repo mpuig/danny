@@ -16,6 +16,7 @@ untouched regardless of confidence.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -40,6 +41,12 @@ def confident_in_unknown(row: dict) -> bool:
     return bool(UNKNOWN_OPTION.search(options[argmax]))
 
 
+def rubric_key(question: dict) -> str:
+    """Must match scripts/audit_ordinality.rubric_key."""
+    payload = json.dumps([question["instructions"], question["criteria"]], sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--synthetic", required=True)
@@ -47,12 +54,26 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--ambiguity", default="missing_evidence")
     ap.add_argument("--max-prob", type=float, default=0.99)
+    ap.add_argument("--ordinality-verdicts", default=None,
+                    help="audit_ordinality output; drops Score rows judged "
+                         "categorical or mixed_unknown_tail")
     args = ap.parse_args()
 
-    kept, dropped, exempted = [], [], []
+    nonordinal: dict[str, str] = {}
+    if args.ordinality_verdicts:
+        for verdict_line in open(args.ordinality_verdicts):
+            verdict = json.loads(verdict_line)
+            if verdict["verdict"] in ("categorical", "mixed_unknown_tail"):
+                nonordinal[verdict["rubric_key"]] = verdict["verdict"]
+
+    kept, dropped, exempted, dropped_nonordinal = [], [], [], []
     for line in open(args.synthetic):
         row = json.loads(line)
         cell = row["provenance"]["cell"]
+        if (row["question"]["type"] == "score"
+                and rubric_key(row["question"]) in nonordinal):
+            dropped_nonordinal.append(row["id"])
+            continue
         if cell["ambiguity"] == args.ambiguity and max(row["target"]) >= args.max_prob:
             if confident_in_unknown(row):
                 exempted.append(row["id"])
@@ -71,6 +92,7 @@ def main() -> None:
 
     print(json.dumps({
         "dropped": len(dropped),
+        "dropped_nonordinal_score": len(dropped_nonordinal),
         "exempted_confident_in_unknown": len(exempted),
         "kept_synthetic": len(kept),
         "combined_rows": sum(1 for _ in out.open()),
