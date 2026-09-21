@@ -391,6 +391,11 @@ def main() -> None:
             for state, item in units:
                 validate_state_for(job["cell"], state)
                 question = validate_question(item["question"], item["expected"], job["cell"])
+                if job["cell"]["primitive"] == "score":
+                    dimension = item.get("scale_dimension") or raw.get("scale_dimension")
+                    if not isinstance(dimension, str) or not dimension.strip():
+                        raise ValueError("score scenario must declare its scale_dimension")
+                    item["scale_dimension"] = dimension
                 validated.append((state, question, item))
             return job, {"raw": raw, "validated": validated}, None
         except urllib.error.HTTPError:
