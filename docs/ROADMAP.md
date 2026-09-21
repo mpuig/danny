@@ -1,6 +1,7 @@
 # Model and serving roadmap
 
-Status: **foundations, controlled model/readout experiments, and bounded serving implemented**.
+Status: **recipe frozen (decision 25); reserved test spent (77.6% / ECE 0.049,
+Experiments §9); scale-up phase open**.
 Updated 2026-09-19. Acceptance gates below are not all met. The numbered phases
 retain the full plan, including completed steps; the status summary identifies
 current progress and outstanding evidence.

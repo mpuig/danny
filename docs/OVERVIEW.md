@@ -58,7 +58,9 @@ The current scope is English text and JSON state, narrow semantic judgments, and
 small backbones. SmolLM2-135M and Qwen3-0.6B have completed structured-v1 training and
 evaluation. Qwen trained on the filtered kev+synthetic corpus with the ordinal RPS loss
 (`qwen3-0.6b-structured-v1-synthfiltered-rps`) is the selected configuration and
-the recipe is frozen (decision 25); the LR-1e-5 run remains the kev-only control;
+the recipe is frozen (decision 25) and the reserved test is spent: 77.6% accuracy /
+ECE 0.049 temperature-scaled on the untouched partition (Experiments §9). The
+LR-1e-5 run remains the kev-only control;
 SmolLM is the smaller comparison. SmolLM3-3B adapters are historical legacy-v0 runs,
 not the current controlled baseline. No structured-v1 3B run has been completed.
 
