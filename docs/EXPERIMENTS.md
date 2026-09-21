@@ -312,3 +312,24 @@ See [Serving](SERVING.md) for deadlines, operating limits, and security caveats.
 - Freeze a final model/configuration before touching the reserved Kev test.
 - Keep shared execution opt-in; validate precision, shapes, adapters, and calibration
   together. No current result establishes private Jev architecture or full parity.
+
+## 9. Reserved test, spent once (2026-09-21)
+
+The frozen configuration (decision 25) was evaluated on the reserved 1,048-question
+Kev test partition, raw and with its pinned per-primitive temperatures — one model,
+one look; the partition is now spent for unbiased evaluation.
+
+| Variant | Accuracy | NLL | Brier | ECE | Score MAE |
+|---|---:|---:|---:|---:|---:|
+| Raw | 77.6% | .523 | .301 | .056 | .614 |
+| Temperature-scaled | 77.6% | .516 | .298 | .049 | .614 |
+
+Per primitive (scaled): Choice 80.6% / ECE .051 (n=464), Noul 84.7% / ECE .045
+(n=424), Score 50.0% / ECE .130 (n=160). Relative to development (82.0%, ECE .020)
+this is a ~4-point accuracy generalization gap and roughly doubled calibration
+error — a realistic in-family transfer estimate, not evidence about unfamiliar
+rubrics or workflows. The fitted temperatures helped on this shift (ECE .056 -> .049),
+unlike on the rubric diagnostic. Score remains the weakest primitive. Reports:
+data/runs/final-test/. Future models cannot be selected on these numbers without
+a fresh reserved partition.
+
