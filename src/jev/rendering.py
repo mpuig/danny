@@ -24,7 +24,10 @@ READOUT_VERSIONS = (LETTER_READOUT, CANDIDATE_READOUT)
 def resolve_readout(version: str | None = None, adapter_path: str | None = None) -> str:
     trained = None
     if adapter_path is not None:
-        config = loads((Path(adapter_path) / "adapter_config.json").read_text())
+        config_path = Path(adapter_path) / "adapter_config.json"
+        if not config_path.is_file():
+            raise ValueError(f"missing adapter metadata: {config_path}")
+        config = loads(config_path.read_text())
         trained = config.get("readout_version", LETTER_READOUT)
         if trained not in READOUT_VERSIONS:
             raise ValueError(f"unsupported adapter readout: {trained!r}")

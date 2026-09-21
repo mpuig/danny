@@ -128,7 +128,7 @@ class InferenceWorker:
         self._admission = threading.Lock()
         self._telemetry = {}
         self._counts = dict(
-            accepted=0, rejected=0, completed=0, failed=0, expired=0, active=0
+            accepted=0, rejected=0, completed=0, failed=0, expired=0, cancelled=0, active=0
         )
         self._thread = threading.Thread(
             target=self._run, args=(factory,), name="jev-inference", daemon=True
@@ -166,7 +166,7 @@ class InferenceWorker:
                 break
             try:
                 if not job.future.set_running_or_notify_cancel():
-                    self._count(expired=1)
+                    self._count(cancelled=1)  # client cancelled; not a deadline expiry
                     continue
                 if time.monotonic() >= job.deadline:
                     self._count(expired=1)

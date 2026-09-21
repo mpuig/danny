@@ -60,14 +60,6 @@ _CONTENT_FREE_STATES = ["N/A", "", "none"]
 _MIN_SHARED_PREFIX = 8
 
 
-def _confidence(probs: list[float]) -> float:
-    """1 - normalized entropy: 1.0 for a single peak, 0.0 for uniform."""
-    k = len(probs)
-    if k < 2:
-        return 1.0
-    entropy = -sum(p * math.log(p) for p in probs if p > 0)
-    return max(0.0, 1.0 - entropy / math.log(k))
-
 
 class SystemOneEngine:
     def __init__(

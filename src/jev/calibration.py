@@ -63,7 +63,10 @@ def fit_temperature(rows: list[dict], lower: float = 0.05, upper: float = 20) ->
             left, x, fx = x, y, fy
             y = left + ratio * (right - left)
             fy = objective(y)
-    log_t = min([0.0, left, right, (left + right) / 2], key=objective)
+    candidates = [left, right, (left + right) / 2]
+    if math.log(lower) <= 0.0 <= math.log(upper):
+        candidates.append(0.0)  # t=1 considered only when the bounds admit it
+    log_t = min(candidates, key=objective)
     t = math.exp(log_t)
     return {
         "temperature": t,

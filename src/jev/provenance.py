@@ -34,12 +34,16 @@ def model_identity(name: str) -> dict:
 
 def environment_identity() -> dict:
     root = Path(__file__).resolve().parents[2]
-    git = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True)
+    try:
+        git = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True)
+        git_head = git.stdout.strip() if git.returncode == 0 else None
+    except FileNotFoundError:  # git not installed (e.g. frozen export)
+        git_head = None
     return {
         "python": sys.version, "platform": platform.platform(),
         "packages": {name: importlib.metadata.version(name)
                      for name in ("mlx", "mlx-lm", "transformers", "huggingface-hub", "numpy")},
-        "git_head_at_capture": git.stdout.strip() if git.returncode == 0 else None,
+        "git_head_at_capture": git_head,
         # These hashes identify actual imported code, even in a frozen export or
         # when another commit is made during a long experiment.
         "source_sha256": {str(p.relative_to(root)): sha256_file(p)
