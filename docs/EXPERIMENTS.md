@@ -350,3 +350,22 @@ Score barely automates (12% coverage at 0.80, 15% risk). Thresholds are
 in-distribution numbers and do not transfer to shifted workloads; confidence
 is top-1 probability, not a probability of correctness.
 
+## 11. Scale-up: MiniCPM5-2B-Base under the frozen recipe (2026-09-21)
+
+Identical corpus, objective, and seed to the selected 0.6B configuration; batch 4
+(hardware-necessitated, as with earlier >2B runs). Final val loss 0.3773 vs the
+0.6B's 0.4990. Development comparison vs the frozen adapter (grouped bootstrap):
+accuracy +4.8 points [+2.7, +7.0], NLL -0.102 [-0.137, -0.068], Brier significant;
+raw dev ECE 0.018 - no calibration tax from the benchmark-tuned base. Held-out
+synthetic: NLL -0.163 [-0.240, -0.090]; accuracy +4.7 points with an interval
+touching zero [-0.004, +0.098].
+
+The score slice moved for the first time: development score accuracy 0.562 ->
+0.673, MAE 0.564 -> 0.435. Confident errors halved (2.2% at t>=0.9 vs 4.8%).
+The rubric canary reads 0.905 acc / NLL 0.252; accuracy there is seed noise by
+decision 24, but the NLL sits far outside the 0.54-0.66 band every 0.6B variant
+occupied. Backbone selection is a pending decision, not automatic: serving
+latency at 2.5B is unmeasured, and the reserved-test equivalent for this model
+does not exist (the old partition is spent). Adapter:
+adapters/minicpm5-2b-structured-v1-synthfiltered-rps; reports data/runs/minicpm-v1/.
+
