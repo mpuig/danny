@@ -432,9 +432,11 @@ def main() -> None:
                 rejected[bucket] += 1
                 if bucket == "api":
                     api_streak += 1
-                    if api_streak > 20:
+                    # one rate-limit window fails every in-flight worker at once,
+                    # so the abort threshold must scale with concurrency
+                    if api_streak > max(20, 4 * args.workers):
                         raise SystemExit("too many consecutive API failures; stopping")
-                    time.sleep(min(2 * api_streak, 30))
+                    time.sleep(min(2 * api_streak / max(args.workers, 1), 30))
             else:
                 api_streak = 0
                 validated = payload["validated"]
