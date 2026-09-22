@@ -50,26 +50,38 @@ uv run python scripts/serve.py --model Qwen/Qwen3-0.6B \
 # ask three typed questions in one request:
 curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" -d '{
-  "state": "I was charged twice for my flight and nobody answers the phone.",
+  "state": "I have been charged twice for my flight to Berlin and nobody is answering the phone. I want my money back immediately.",
   "questions": {
-    "refund":      {"type": "noul",   "instructions": "Does the customer want money back?"},
-    "route":       {"type": "choice", "instructions": "Which queue should handle this?",
-                    "criteria": {"billing": "Payment issues.", "support": "Everything else."}},
-    "frustration": {"type": "score",  "instructions": "How frustrated is the customer?",
-                    "criteria": ["Calm.", "Annoyed.", "Angry."]}}}'
+    "refund_requested": {"type": "noul", "instructions": "Does the customer explicitly request a refund?"},
+    "request_type": {"type": "choice", "instructions": "What is the main request?",
+      "criteria": {"refund": "The customer wants money returned.",
+                   "rebooking": "The customer wants a replacement flight.",
+                   "information": "The customer wants information only."}},
+    "frustration": {"type": "score", "instructions": "How frustrated is the customer?",
+      "criteria": ["Calm; neutral tone.", "Annoyed; complains but cooperative.", "Angry; threats or ultimatums."]}}}'
 ```
 
-Every question gets a typed answer with probabilities — nothing is generated
-or parsed:
+Actual output (rounded) — every question gets a typed answer with probabilities;
+nothing is generated or parsed:
 
 ```json
-{"model": "Qwen/Qwen3-0.6B@…",
+{"model": "Qwen/Qwen3-0.6B@f9fabd98...",
  "answers": {
-   "refund":      {"noul": 0.93},
-   "route":       {"choice": "billing", "probabilities": {"billing": 0.91, "support": 0.09}, "confidence": 0.82},
-   "frustration": {"score": 1.7, "probabilities": {"0": 0.05, "1": 0.21, "2": 0.74}, "…": "…"}},
- "usage": {"input_tokens": 385, "output_tokens": 0}}
+   "refund_requested": {"noul": 0.681},
+   "request_type":     {"choice": "refund",
+                        "probabilities": {"refund": 0.993, "rebooking": 0.007, "information": 0.0003},
+                        "confidence": 0.989},
+   "frustration":      {"score": 1.72,
+                        "probabilities": {"0": 0.065, "1": 0.150, "2": 0.785},
+                        "legend": {"0": "Calm; neutral tone.", "1": "Annoyed; complains but cooperative.", "2": "Angry; threats or ultimatums."},
+                        "confidence": 0.579}},
+ "usage": {"input_tokens": 355, "output_tokens": 0}}
 ```
+
+Note the shape of calibrated honesty: decisive where the evidence is explicit
+(request_type at 0.99), hedged where it is thinner — these are probabilities to
+threshold and act on, not performative certainty. Criteria descriptions matter:
+the same questions with bare one-word options answer far less confidently.
 
 The **[quality tier](https://huggingface.co/mpuig/danny-minicpm5-2b-q8)**
 (MiniCPM5-2B fused to 8-bit — +6.8 accuracy points over the 0.6B on the fresh
