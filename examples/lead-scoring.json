@@ -1,0 +1,32 @@
+{
+  "state": {
+    "ideal_customer_profile": "B2B SaaS companies, 50-500 employees, with in-house support teams handling over 1,000 tickets per month.",
+    "inbound_message": "Hi - I run support ops at a 120-person logistics software company. We're drowning: about 4,000 tickets/month across email and chat, and our team of 9 can't keep up with triage. Currently evaluating tools for this quarter's budget. Can you share pricing and whether you integrate with Zendesk?"
+  },
+  "questions": {
+    "icp_fit": {
+      "type": "score",
+      "instructions": "How well does the sender's company match the ideal_customer_profile?",
+      "criteria": [
+        "No fit; wrong segment entirely.",
+        "Weak; matches one attribute loosely.",
+        "Good; matches most attributes.",
+        "Excellent; squarely inside the profile."
+      ]
+    },
+    "buying_intent": {
+      "type": "noul",
+      "instructions": "Does the message show active purchase intent (budget, timeline, evaluation), not just curiosity?"
+    },
+    "next_step": {
+      "type": "choice",
+      "instructions": "What should happen next with this lead?",
+      "criteria": {
+        "route_to_sales": "Qualified; a salesperson should reply promptly.",
+        "nurture": "Interested but not ready; add to nurture sequence.",
+        "self_serve": "Point to docs/pricing page; no sales touch needed.",
+        "disqualify": "Not a fit; polite decline."
+      }
+    }
+  }
+}

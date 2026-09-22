@@ -1,0 +1,31 @@
+{
+  "state": {
+    "prompt": "We have a Postgres table of 40M events with a composite index on (tenant_id, created_at). Query latency degraded 20x after adding a JSONB column with per-row metadata blobs of ~8KB. Explain the most likely causes, how TOAST storage interacts with our index-only scans, and propose a migration plan that avoids downtime."
+  },
+  "questions": {
+    "domain": {
+      "type": "choice",
+      "instructions": "Which domain best matches the prompt?",
+      "criteria": {
+        "software_engineering": "Code, databases, infrastructure, debugging.",
+        "writing": "Prose drafting, editing, or summarization.",
+        "data_analysis": "Statistics, spreadsheets, business metrics.",
+        "general_chat": "Casual conversation or broad questions."
+      }
+    },
+    "difficulty": {
+      "type": "score",
+      "instructions": "How difficult is this prompt for a language model?",
+      "criteria": [
+        "Trivial; a one-line factual answer suffices.",
+        "Easy; common knowledge, low reasoning depth.",
+        "Moderate; multi-step reasoning or niche knowledge.",
+        "Hard; deep domain expertise and multi-part synthesis."
+      ]
+    },
+    "needs_frontier_model": {
+      "type": "noul",
+      "instructions": "Would routing this to a small general model risk a materially wrong or incomplete answer?"
+    }
+  }
+}

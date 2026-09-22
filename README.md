@@ -97,6 +97,11 @@ Details in `release/MODEL_CARD_minicpm5-2b-q8.md`. Per-workload calibration —
 fitting temperatures to *your* traffic from ~100 labeled decisions — is one
 call: `POST /v1/calibrations` (see [docs/SERVING.md](docs/SERVING.md)).
 
+**Eight ready-to-run use-case examples** — support triage, LLM guardrails,
+model routing, RAG reranking, citation checking, moderation, claims intake,
+lead scoring — live in [`examples/`](examples/), each with the actual output of
+both tiers, including the honest misses.
+
 **Not affiliated with or endorsed by TypeSafe.** "Jev-compatible" describes the
 request/answer shape (the official TypeScript SDK runs against this server
 unchanged in smoke tests), not certified behavioral equivalence. Training data
@@ -206,6 +211,7 @@ or overlapping legacy artifacts. See [Data](docs/DATA.md).
 
 ## Documentation
 
+- [Use-case examples](examples/README.md) — eight runnable request templates after Jev's use-case catalog, with real two-tier outputs
 - [Example benchmark](BENCHMARK.md) — 24 local Qwen requests versus fresh Jev 1.13.0 and historical cached answers; a small diagnostic, not full parity evidence
 - [Overview](docs/OVERVIEW.md) — goals, scope, evidence, and sources
 - [Architecture](docs/ARCHITECTURE.md) — current implementation and compatibility gaps

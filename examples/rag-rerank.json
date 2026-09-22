@@ -1,0 +1,22 @@
+{
+  "state": {
+    "query": "How do I rotate API keys without downtime?",
+    "candidate_passage": "Key rotation is supported through overlapping validity windows: create a second key, deploy it to all services, verify traffic has moved by watching the per-key request metrics, then revoke the old key. Both keys remain valid during the overlap, so no request is ever rejected during the rotation."
+  },
+  "questions": {
+    "relevance": {
+      "type": "score",
+      "instructions": "How well does candidate_passage answer the query?",
+      "criteria": [
+        "Irrelevant; different topic entirely.",
+        "Tangential; shares keywords but does not answer.",
+        "Partial; answers some of the question or lacks steps.",
+        "Strong; directly answers with actionable detail."
+      ]
+    },
+    "self_contained": {
+      "type": "noul",
+      "instructions": "Could candidate_passage answer the query on its own, without additional context?"
+    }
+  }
+}

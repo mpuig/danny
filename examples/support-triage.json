@@ -1,0 +1,36 @@
+{
+  "state": {
+    "channel": "email",
+    "customer_tier": "premium",
+    "message": "This is the third time I'm writing. My September invoice shows two charges of 49.90 EUR for the same subscription. I was told last week this would be fixed in 48 hours. Nothing happened. If this isn't resolved by Friday I'm cancelling my account and disputing the charge with my bank."
+  },
+  "questions": {
+    "issue_area": {
+      "type": "choice",
+      "instructions": "Which product area does this ticket belong to?",
+      "criteria": {
+        "billing": "Charges, invoices, refunds, payment methods.",
+        "account": "Login, credentials, profile, cancellation mechanics.",
+        "product_bug": "The product malfunctions or behaves unexpectedly.",
+        "how_to": "The customer needs usage guidance."
+      }
+    },
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "Does the customer explicitly or implicitly request money back?"
+    },
+    "churn_risk": {
+      "type": "noul",
+      "instructions": "Does the customer threaten or strongly imply they will cancel?"
+    },
+    "urgency": {
+      "type": "score",
+      "instructions": "How urgent is this ticket?",
+      "criteria": [
+        "Routine; no deadline or escalation pressure.",
+        "Elevated; repeated contact or explicit dissatisfaction.",
+        "Urgent; deadline, threat, or imminent financial action."
+      ]
+    }
+  }
+}

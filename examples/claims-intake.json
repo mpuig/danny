@@ -1,0 +1,36 @@
+{
+  "state": {
+    "policy_type": "home contents",
+    "first_notice_of_loss": "Policyholder reports a water leak discovered Saturday morning under the kitchen sink. States the dishwasher hose 'probably' failed some weeks ago. Laminate flooring is warped across kitchen and hallway. No photos provided yet. Policyholder mentions a similar claim at a previous address two years ago and asks specifically which documentation would maximize the payout."
+  },
+  "questions": {
+    "claim_type": {
+      "type": "choice",
+      "instructions": "Classify the reported loss.",
+      "criteria": {
+        "water_damage": "Leaks, escapes of water, flooding from internal sources.",
+        "fire": "Fire, smoke, or scorching damage.",
+        "theft": "Burglary or theft of contents.",
+        "accidental_damage": "Sudden one-off damage to contents."
+      }
+    },
+    "missing_information": {
+      "type": "noul",
+      "instructions": "Is key information missing to assess this claim (evidence, dates, cause)?"
+    },
+    "fraud_indicator": {
+      "type": "noul",
+      "instructions": "Does the report contain indicators that warrant fraud screening (not an accusation)?"
+    },
+    "complexity": {
+      "type": "score",
+      "instructions": "How complex will this claim be to process?",
+      "criteria": [
+        "Simple; clear cause, small scope, straight-through processable.",
+        "Standard; needs routine documentation and one assessment.",
+        "Complex; unclear causation, gradual damage, or coverage questions.",
+        "Specialist; multiple red flags or high-value investigation."
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "state": {
+    "claim": "The study found that remote workers were 13% more productive than their office-based counterparts.",
+    "cited_passage": "Treatment group workers completed 13.5% more calls per shift. The authors attribute roughly 9 points of the gain to quieter working conditions and the remainder to longer effective shifts, noting that promotion rates conditional on performance fell for the remote group."
+  },
+  "questions": {
+    "supported": {
+      "type": "noul",
+      "instructions": "Does cited_passage support the claim as stated?"
+    },
+    "support_quality": {
+      "type": "score",
+      "instructions": "Rate how faithfully the claim represents the cited_passage.",
+      "criteria": [
+        "Contradicted; the passage says otherwise.",
+        "Unsupported; the passage is about something else.",
+        "Partially supported; directionally right but imprecise or missing caveats.",
+        "Fully supported; numbers and framing match."
+      ]
+    }
+  }
+}

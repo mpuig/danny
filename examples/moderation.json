@@ -1,0 +1,33 @@
+{
+  "state": {
+    "community": "consumer-fitness app, public comments",
+    "post": "Stop wasting money on protein. I lost 20kg taking 3x the label dose of these fat burner pills, DM me for my supplier, way cheaper than pharmacy and no prescription needed."
+  },
+  "questions": {
+    "violation": {
+      "type": "choice",
+      "instructions": "Which moderation category best fits the post?",
+      "criteria": {
+        "none": "No policy violation.",
+        "unsafe_advice": "Encourages harmful health practices or misuse.",
+        "spam_or_solicitation": "Unsolicited selling, referral bait, or link farming.",
+        "harassment": "Attacks or demeans a person or group.",
+        "prohibited_goods": "Sells or sources regulated or illegal products."
+      }
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How severe is the harm if this post stays up?",
+      "criteria": [
+        "Minimal; cosmetic or off-topic.",
+        "Low; mildly misleading or annoying.",
+        "Moderate; could cause real harm to some readers.",
+        "High; likely to cause physical, financial, or legal harm."
+      ]
+    },
+    "review_needed": {
+      "type": "noul",
+      "instructions": "Should a human moderator review this post before any automated action?"
+    }
+  }
+}
