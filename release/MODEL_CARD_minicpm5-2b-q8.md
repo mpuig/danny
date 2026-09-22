@@ -51,8 +51,9 @@ trusting thresholds on a new workload; it repaired scalar miscalibration to
 
 ```bash
 git clone https://github.com/mpuig/danny && cd danny && uv sync
-uv run python scripts/serve.py --model <this-repo-dir> \
-  --temperature <this-repo-dir>/temperature.json
+hf download mpuig/danny-minicpm5-2b-q8 --local-dir danny-minicpm5-2b-q8
+uv run python scripts/serve.py --model danny-minicpm5-2b-q8 \
+  --temperature danny-minicpm5-2b-q8/temperature.json
 ```
 
 Light 3-question request: ~195 ms p50 on an M4 Max. Apple Silicon required

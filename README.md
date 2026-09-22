@@ -31,6 +31,12 @@ workflow logic; the model supplies semantic judgments and useful uncertainty.
 
 Requires **Apple Silicon** (MLX) and [uv](https://docs.astral.sh/uv/).
 
+**Models on HuggingFace:**
+[mpuig/danny-qwen3-0.6b](https://huggingface.co/mpuig/danny-qwen3-0.6b)
+(volume tier — the adapter also ships in this repo) ·
+[mpuig/danny-minicpm5-2b-q8](https://huggingface.co/mpuig/danny-minicpm5-2b-q8)
+(quality tier, 2.5 GB). Each carries its identity-bound `temperature.json`.
+
 ```bash
 git clone https://github.com/mpuig/danny && cd danny
 uv sync
@@ -65,8 +71,9 @@ or parsed:
  "usage": {"input_tokens": 385, "output_tokens": 0}}
 ```
 
-The **quality tier** (MiniCPM5-2B fused to 8-bit — +6.8 accuracy points over the
-0.6B on the fresh reserved test, CI [+4.5, +9.2]) is a 2.5 GB download:
+The **[quality tier](https://huggingface.co/mpuig/danny-minicpm5-2b-q8)**
+(MiniCPM5-2B fused to 8-bit — +6.8 accuracy points over the 0.6B on the fresh
+reserved test, CI [+4.5, +9.2]) is a 2.5 GB download:
 
 ```bash
 hf download mpuig/danny-minicpm5-2b-q8 --local-dir models/danny-minicpm5-2b-q8

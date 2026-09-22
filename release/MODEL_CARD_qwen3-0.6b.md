@@ -47,9 +47,14 @@ miscalibration to 3-4% confident errors in the repo's resampled experiment.
 
 ```bash
 git clone https://github.com/mpuig/danny && cd danny && uv sync
+hf download mpuig/danny-qwen3-0.6b --local-dir danny-qwen3-0.6b
 uv run python scripts/serve.py --model Qwen/Qwen3-0.6B \
-  --adapter <this-repo> --temperature <this-repo>/temperature.json
+  --adapter danny-qwen3-0.6b --temperature danny-qwen3-0.6b/temperature.json
 ```
+
+(The same adapter and temperature file also ship inside the GitHub repo at
+`adapters/qwen3-0.6b-structured-v1-synthfiltered-rps` and
+`release/temperature-qwen3-0.6b.json`, so the download step is optional there.)
 
 Apple Silicon required (MLX). Score is this tier's weak primitive (50% on the
 unbiased test); use the quality tier for score-heavy workloads. This is a
