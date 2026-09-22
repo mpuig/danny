@@ -610,3 +610,36 @@ T near 1 with high residual ECE means the workload's failure is not scalar and
 the correct output is a warning plus wider escalation, not a temperature.
 Demonstration fits from this experiment are never served. Report:
 data/runs/workload-calibration-v1/report.json.
+
+## 32. Per-workload calibration built into serving
+
+Status: **implemented and verified 2026-09-22** (user-directed; the evidence
+gate is decision 31 / experiments §15).
+
+Design: `POST /v1/calibrations` fits per-primitive scalar temperatures on a
+labeled sample (25-256 examples) by scoring each example through the exact
+serving path — raw plus contextual correction, before any temperature — on the
+model thread. The artifact binds the workload name to the full serving
+prediction-config and its own integrity hash; `/v1/systemone` selects it via an
+opt-in `"calibration"` field (unknown name = 422), the response echoes the
+workload and hash, and `GET /v1/models` lists the registry. Fits live in
+bounded memory; the returned artifact reloads at startup via
+`--workload-calibration`, identity-checked and fail-closed like the global
+temperature. The fitted-temperature diagnostic from decision 31 ships in every
+response: apply / neutral / structural_warning / degenerate /
+insufficient_examples, with a primitive that is degenerate or under-sampled
+diagnosed but never applied.
+
+Implementation note: the degenerate guard had to be broader than the
+optimizer's at-bound flag — an all-correct sample produces a zero-NLL plateau
+whose minimizer stops near, not at, the bound, and would otherwise register a
+sharpen-to-certainty temperature.
+
+Verification: 83/83 unit tests (new: fit routing and its separate deadline
+budget, discovery refresh, label strictness, verdicts, degenerate exclusion);
+end-to-end against the served q8 quality tier, a 100-example sms_spam fit
+returned T=0.1167 with the offline fit on the identical rows matching to four
+decimals — the serving path is numerically the experiment pipeline. The demo
+fit was registered in a live process only and is not served or persisted
+(decision 31's scope guard). Remaining companion feature: out-of-family
+abstention for structural_warning workloads.

@@ -333,6 +333,50 @@ All ceilings are configurable through `--help`. Larger settings are not certifie
 safe merely because a backbone advertises a longer context. Account for model
 weights, precision, working tensors, allocator cache, and other applications.
 
+## Per-workload calibration
+
+The out-of-family calibration failure is measured (experiments §14) and so is
+the repair (§15): a scalar temperature fitted on ~100 labeled decisions from a
+workload's own traffic. The server supports that fit directly.
+
+**Fit:** `POST /v1/calibrations` with
+`{"workload": "<name>", "examples": [{"state", "question", "label"}, ...]}`.
+Labels are gold answers: the option key for choice, the level index for score,
+true/false for noul. The server scores every example through the exact serving
+path (raw plus contextual correction, before any temperature), fits per-primitive
+temperatures, registers the result under the workload name, and returns the
+artifact. Between 25 (`--min-calibration-examples`) and 256
+(`--max-calibration-examples`) examples per request; ~100 per primitive is the
+evidence-backed recommendation. **A fit runs on the single model thread and
+blocks other requests for its duration** (`--fit-timeout`, default 120 s): run
+fits off-peak.
+
+**Use:** add `"calibration": "<name>"` to a `/v1/systemone` request. The
+workload's temperatures replace the global ones for the primitives they cover;
+uncovered primitives keep the global temperature. The response echoes
+`{"calibration": {"workload", "sha256"}}`. An unknown name is a 422 — fail
+closed, never silently uncalibrated.
+
+**Diagnostics are the feature, not a footnote.** Each fit reports per primitive:
+the temperature, NLL and top-1 ECE before/after (in-sample, therefore
+optimistic), and a verdict — `apply` (|log T| is material), `neutral`
+(temperature ~1, calibration already fine), `structural_warning` (temperature ~1
+but residual ECE > 0.10: the miscalibration is not scalar; widen escalation
+instead of trusting the fit), `degenerate` (bound hit or an all-correct
+zero-NLL plateau; never applied), or `insufficient_examples` (never applied).
+
+**Persistence:** the server stores fits in memory only (bounded,
+`--max-workload-calibrations`, default 16). Save the returned artifact and
+reload it at startup with `--workload-calibration FILE` (repeatable). Loading
+verifies the artifact's integrity hash and its full prediction-config identity
+against the running configuration — a fit from different weights, renderer,
+precision, or execution mode is refused. `GET /v1/models` lists registered
+workloads and their hashes.
+
+Temperatures fitted on one workload's sample are valid for that workload only,
+and in-sample diagnostics overstate held-out quality; the resampled evidence is
+experiments §15. A temperature never changes the argmax answer.
+
 ## Protocol and failure policy
 
 - `POST /v1/systemone`: typed answers, actual artifact/configuration identity, local

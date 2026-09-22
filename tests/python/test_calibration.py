@@ -110,3 +110,74 @@ class TemperatureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorkloadFitTests(unittest.TestCase):
+    def test_label_mapping_is_strict(self):
+        from jev.calibration import label_to_target_index
+        from jev.schema import Question
+
+        choice = Question(type="choice", instructions="pick", criteria={"a": None, "b": None})
+        noul = Question(type="noul", instructions="is it?")
+        score = Question(type="score", instructions="rate", criteria=["low", "mid", "high"])
+        self.assertEqual(label_to_target_index(choice, "b"), 1)
+        self.assertEqual(label_to_target_index(noul, True), 1)
+        self.assertEqual(label_to_target_index(noul, False), 0)
+        self.assertEqual(label_to_target_index(score, 2), 2)
+        for question, label in (
+            (choice, "c"),
+            (choice, 0),
+            (noul, 1),
+            (noul, "yes"),
+            (score, True),
+            (score, 3),
+            (score, -1),
+            (score, "2"),
+        ):
+            with self.assertRaises(ValueError):
+                label_to_target_index(question, label)
+
+    def test_build_workload_fits_verdicts_and_exclusions(self):
+        from jev.calibration import build_workload_fits
+
+        # 70% correct at 0.97 confidence: optimal temperature ~ 4, finite
+        overconfident = [
+            {"probabilities": [0.97, 0.03], "target": [1.0, 0.0]} if i < 21
+            else {"probabilities": [0.97, 0.03], "target": [0.0, 1.0]}
+            for i in range(30)
+        ]
+        fits, diagnostics = build_workload_fits({"noul": overconfident}, 25)
+        self.assertIn("noul", fits)
+        self.assertGreater(fits["noul"]["temperature"], 1.25)
+        self.assertEqual(diagnostics["noul"]["verdict"], "apply")
+        self.assertLess(diagnostics["noul"]["ece_after"], diagnostics["noul"]["ece_before"])
+
+        # a sample below the floor is diagnosed but never fitted
+        with self.assertRaises(ValueError):
+            build_workload_fits({"noul": overconfident[:10]}, 25)
+        fits, diagnostics = build_workload_fits(
+            {"noul": overconfident, "score": overconfident[:5]}, 25
+        )
+        self.assertNotIn("score", fits)
+        self.assertEqual(diagnostics["score"]["verdict"], "insufficient_examples")
+
+        # a degenerate all-correct sample drives the fit to a bound: excluded
+        degenerate = [
+            {"probabilities": [0.9, 0.1], "target": [1.0, 0.0]} for _ in range(30)
+        ]
+        with self.assertRaises(ValueError):
+            build_workload_fits({"noul": degenerate}, 25)
+
+    def test_top1_ece_orders_calibration_quality(self):
+        from jev.calibration import top1_ece
+
+        honest = [
+            {"probabilities": [0.8, 0.2], "target": [1.0, 0.0]} if i < 8
+            else {"probabilities": [0.8, 0.2], "target": [0.0, 1.0]}
+            for i in range(10)
+        ]
+        overconfident = [
+            {"probabilities": [0.99, 0.01], "target": [0.0, 1.0]} for _ in range(10)
+        ]
+        self.assertLess(top1_ece(honest, 1.0), 0.05)
+        self.assertGreater(top1_ece(overconfident, 1.0), 0.9)

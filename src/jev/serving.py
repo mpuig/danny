@@ -107,19 +107,30 @@ class Job:
     request: dict
     deadline: float
     future: Future
+    operation: str = "respond"
 
 
 class InferenceWorker:
-    def __init__(self, factory, *, capacity=8, timeout=30.0, startup_timeout=120.0):
+    def __init__(
+        self,
+        factory,
+        *,
+        capacity=8,
+        timeout=30.0,
+        startup_timeout=120.0,
+        fit_timeout=120.0,
+    ):
         if (
             type(capacity) is not int
             or capacity < 1
             or not _positive_number(timeout)
             or not _positive_number(startup_timeout)
+            or not _positive_number(fit_timeout)
         ):
             raise ValueError("positive queue capacity and timeouts required")
         self.capacity = capacity
         self.timeout = timeout
+        self.fit_timeout = fit_timeout
         self._queue = queue.Queue(maxsize=capacity)
         self._ready = threading.Event()
         self._closed = threading.Event()
@@ -177,11 +188,17 @@ class InferenceWorker:
                 self._count(active=1)
                 engine.request_deadline = job.deadline
                 try:
-                    result = respond_http(engine, job.request)
+                    if job.operation == "fit":
+                        result = engine.fit_workload(job.request)
+                    else:
+                        result = respond_http(engine, job.request)
                     if time.monotonic() >= job.deadline:
                         raise InferenceDeadlineExceeded("request deadline exceeded")
                     job.future.set_result(result)
                     self._count(completed=1)
+                    if job.operation == "fit":
+                        # a registered workload must appear in /v1/models
+                        self._description = engine.describe()
                 except InferenceDeadlineExceeded as exc:
                     job.future.set_exception(exc)
                     self._count(expired=1)
@@ -201,13 +218,16 @@ class InferenceWorker:
             finally:
                 self._queue.task_done()
 
-    def submit(self, request, *, timeout=None):
+    def submit(self, request, *, timeout=None, operation="respond"):
         if timeout is not None and not _positive_number(timeout):
             raise ValueError("timeout must be finite and positive")
-        budget = self.timeout if timeout is None else min(timeout, self.timeout)
+        if operation not in ("respond", "fit"):
+            raise ValueError("operation must be respond or fit")
+        ceiling = self.fit_timeout if operation == "fit" else self.timeout
+        budget = ceiling if timeout is None else min(timeout, ceiling)
         future = Future()
         # Callers cannot mutate a queued request after admission.
-        job = Job(copy.deepcopy(request), time.monotonic() + budget, future)
+        job = Job(copy.deepcopy(request), time.monotonic() + budget, future, operation)
         with self._admission:
             if self._closed.is_set():
                 raise ServiceBusy("service is stopping")
@@ -226,6 +246,14 @@ class InferenceWorker:
         except FutureTimeout as exc:
             future.cancel()  # Pending jobs are skipped; running jobs check deadline.
             raise InferenceDeadlineExceeded("request deadline exceeded") from exc
+
+    def fit(self, request):
+        future = self.submit(request, operation="fit")
+        try:
+            return future.result(timeout=self.fit_timeout)
+        except FutureTimeout as exc:
+            future.cancel()  # Pending jobs are skipped; running jobs check deadline.
+            raise InferenceDeadlineExceeded("calibration fit deadline exceeded") from exc
 
     def describe(self):
         return copy.deepcopy(self._description)
@@ -372,7 +400,8 @@ def make_handler(backend, *, max_body_bytes=262144, io_timeout=10.0):
                 self._error(404, "not found")
 
         def do_POST(self):
-            if self.path.rstrip("/") != "/v1/systemone":
+            path = self.path.rstrip("/")
+            if path not in ("/v1/systemone", "/v1/calibrations"):
                 return self._error(404, "not found")
             if self.headers.get("Transfer-Encoding"):
                 return self._error(400, "chunked request bodies are not supported")
@@ -402,11 +431,18 @@ def make_handler(backend, *, max_body_bytes=262144, io_timeout=10.0):
                     request = loads(body)
                 except (ValueError, TypeError) as exc:
                     raise RequestValidationError(str(exc)) from exc
-                result = (
-                    backend.infer(request)
-                    if hasattr(backend, "infer")
-                    else respond_http(backend, request)
-                )
+                if path == "/v1/calibrations":
+                    result = (
+                        backend.fit(request)
+                        if hasattr(backend, "fit")
+                        else backend.fit_workload(request)
+                    )
+                else:
+                    result = (
+                        backend.infer(request)
+                        if hasattr(backend, "infer")
+                        else respond_http(backend, request)
+                    )
                 self._send(200, result)
             except InferenceDeadlineExceeded as exc:
                 self._error(504, str(exc))

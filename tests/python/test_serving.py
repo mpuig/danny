@@ -33,7 +33,26 @@ class FakeEngine:
         self.owner = threading.get_ident()
 
     def describe(self):
-        return {"id": "fixture-model", "object": "model"}
+        return {
+            "id": "fixture-model",
+            "object": "model",
+            "workload_calibration": {"registered": dict(getattr(self, "fitted", {}))},
+        }
+
+    def fit_workload(self, request):
+        if threading.get_ident() != self.owner:
+            raise RuntimeError("model used from the wrong thread")
+        name = request.get("workload")
+        if name == "invalid":
+            raise RequestValidationError("invalid fixture fit")
+        if name == "fail":
+            raise RuntimeError("do not expose this internal detail")
+        if name == "slow-fit":
+            time.sleep(0.1)
+        if not hasattr(self, "fitted"):
+            self.fitted = {}
+        self.fitted[name] = "digest-" + name
+        return {"workload": name, "sha256": "digest-" + name, "fits": {}}
 
     def respond(self, request):
         if threading.get_ident() != self.owner:
@@ -195,6 +214,48 @@ class BoundedHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["echo"], "ok")
         self.assertEqual(headers["Connection"], "close")
+
+    def test_calibration_fit_routes_and_refreshes_discovery(self):
+        status, data, _ = self.request(
+            "POST",
+            "/v1/calibrations",
+            '{"workload":"wl1"}',
+            {"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(data["workload"], "wl1")
+        status, data, _ = self.request("GET", "/v1/models")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            data["data"][0]["workload_calibration"]["registered"],
+            {"wl1": "digest-wl1"},
+        )
+
+    def test_calibration_fit_error_statuses(self):
+        post = lambda body: self.request(
+            "POST", "/v1/calibrations", body, {"Content-Type": "application/json"}
+        )
+        self.assertEqual(post('{"workload":"invalid"}')[0], 422)
+        status, body, _ = post('{"workload":"fail"}')
+        self.assertEqual(status, 500)
+        self.assertNotIn("internal detail", json.dumps(body))
+        self.assertEqual(
+            self.request(
+                "POST", "/v1/other", "{}", {"Content-Type": "application/json"}
+            )[0],
+            404,
+        )
+
+    def test_fit_uses_its_own_deadline_budget(self):
+        # respond timeout is 0.05s; the same duration must pass as a fit
+        self.assertEqual(self.post('{"state":"slow"}')[0], 504)
+        status, _, _ = self.request(
+            "POST",
+            "/v1/calibrations",
+            '{"workload":"slow-fit"}',
+            {"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
 
     def test_rejection_and_timeout_statuses(self):
         self.assertEqual(self.post('{"state":"' + "x" * 100 + '"}')[0], 413)

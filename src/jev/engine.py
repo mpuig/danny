@@ -22,7 +22,12 @@ from mlx_lm import load
 from mlx_lm.models.cache import make_prompt_cache
 
 from .schema import Answer, ChoiceAnswer, NoulAnswer, Question, ScoreAnswer
-from .calibration import temperature_scale
+from .calibration import (
+    WORKLOAD_METHOD,
+    build_workload_fits,
+    label_to_target_index,
+    temperature_scale,
+)
 from .confidence import confidence, SCHEMES, ADAPTER, ENTROPY
 from .provenance import model_identity
 from .data import sha256_file
@@ -76,7 +81,23 @@ class SystemOneEngine:
         confidence_scheme: str | None = None,
         limits: EngineLimits | None = None,
         mlx_cache_limit_bytes: int | None = None,
+        workload_calibration_paths: list[str] | None = None,
+        max_workload_calibrations: int = 16,
+        min_calibration_examples: int = 25,
+        max_calibration_examples: int = 256,
     ):
+        for name, value in (
+            ("max_workload_calibrations", max_workload_calibrations),
+            ("min_calibration_examples", min_calibration_examples),
+            ("max_calibration_examples", max_calibration_examples),
+        ):
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if min_calibration_examples > max_calibration_examples:
+            raise ValueError("min_calibration_examples exceeds the example cap")
+        self.max_workload_calibrations = max_workload_calibrations
+        self.min_calibration_examples = min_calibration_examples
+        self.max_calibration_examples = max_calibration_examples
         if precision not in ("native", "float16", "float32"):
             raise ValueError("precision must be native, float16, or float32")
         if execution_mode not in ("independent", "shared"):
@@ -149,25 +170,25 @@ class SystemOneEngine:
         )
         self._temperatures = {}
         self.temperature_path = temperature_path
+        self._expected_prediction_config = {
+            "max_batch_size": max_batch_size,
+            "renderer_version": self.renderer_version,
+            "readout_version": self.readout_version,
+            "precision": precision,
+            "execution_mode": execution_mode,
+            "contextual_correction": contextual_calibration,
+            "backbone_files": self.backbone_identity["files"],
+            "adapter_sha256": self.adapter_digest,
+        }
         if temperature_path:
             artifact = loads(Path(temperature_path).read_text())
             actual_config = dict(artifact.get("prediction_config", {}))
             # Earlier artifacts were produced by evaluators fixed at four views.
             actual_config.setdefault("max_batch_size", 4)
-            expected = {
-                "max_batch_size": max_batch_size,
-                "renderer_version": self.renderer_version,
-                "readout_version": self.readout_version,
-                "precision": precision,
-                "execution_mode": execution_mode,
-                "contextual_correction": contextual_calibration,
-                "backbone_files": self.backbone_identity["files"],
-                "adapter_sha256": self.adapter_digest,
-            }
             if (
                 artifact.get("format_version") != 1
                 or artifact.get("method") != "per-primitive-temperature-v1"
-                or actual_config != expected
+                or actual_config != self._expected_prediction_config
             ):
                 raise ValueError(
                     "temperature artifact does not match model/tokenizer/readout/runtime configuration"
@@ -180,6 +201,9 @@ class SystemOneEngine:
         self.temperature_digest = (
             sha256_file(temperature_path) if temperature_path else None
         )
+        self._workload_calibrations: dict[str, dict] = {}
+        for path in workload_calibration_paths or []:
+            self._register_workload_artifact(loads(Path(path).read_text()), path)
         self.implementation_hashes = {
             name: sha256_file(Path(__file__).parent / name)
             for name in (
@@ -234,6 +258,17 @@ class SystemOneEngine:
             "shared_prefix_supported": self._head_projection() is not None,
             "confidence_scheme": getattr(self, "confidence_scheme", ENTROPY),
             "temperature_sha256": getattr(self, "temperature_digest", None),
+            "workload_calibration": {
+                "registered": {
+                    name: artifact["sha256"]
+                    for name, artifact in getattr(
+                        self, "_workload_calibrations", {}
+                    ).items()
+                },
+                "max_workloads": getattr(self, "max_workload_calibrations", 0),
+                "min_examples": getattr(self, "min_calibration_examples", 0),
+                "max_examples": getattr(self, "max_calibration_examples", 0),
+            },
             "max_batch_size": getattr(self, "max_batch_size", 4),
             "limits": limits,
             "mlx_allocator_cache_limit_bytes": getattr(
@@ -463,7 +498,39 @@ class SystemOneEngine:
 
     # -- public API ------------------------------------------------------------
 
-    def ask(self, state: State, questions: dict[str, Question]) -> dict[str, Answer]:
+    def ask(
+        self,
+        state: State,
+        questions: dict[str, Question],
+        workload: str | None = None,
+    ) -> dict[str, Answer]:
+        selected = None
+        if workload is not None:
+            selected = getattr(self, "_workload_calibrations", {}).get(workload)
+            if selected is None:
+                raise RequestValidationError(
+                    "unknown calibration workload; fit one via POST /v1/calibrations"
+                )
+        distributions = self._pretemperature_distributions(state, questions)
+        answers: dict[str, Answer] = {}
+        for qid, q in questions.items():
+            probs = distributions[qid]
+            if selected is not None and q.type in selected["fits"]:
+                temperature = selected["fits"][q.type]["temperature"]
+            else:
+                # primitives without a workload fit keep the global temperature
+                temperature = getattr(self, "_temperatures", {}).get(q.type)
+            if temperature is not None:
+                probs = temperature_scale(probs, temperature)
+            answers[qid] = self._to_answer(
+                q, probs, getattr(self, "confidence_scheme", ENTROPY)
+            )
+        return answers
+
+    def _pretemperature_distributions(
+        self, state: State, questions: dict[str, Question]
+    ) -> dict[str, list[float]]:
+        """Validated raw-plus-contextual distributions, before any temperature."""
         try:
             validate_state(state)
             if not isinstance(questions, dict) or not questions:
@@ -486,16 +553,10 @@ class SystemOneEngine:
         try:
             self._preadmit(state, questions, limits)
             raw = self._raw_distributions(state, questions)
-            answers: dict[str, Answer] = {}
-            for qid, q in questions.items():
-                probs = self._apply_calibration(q, raw[qid])
-                temperature = getattr(self, "_temperatures", {}).get(q.type)
-                if temperature is not None:
-                    probs = temperature_scale(probs, temperature)
-                answers[qid] = self._to_answer(
-                    q, probs, getattr(self, "confidence_scheme", ENTROPY)
-                )
-            return answers
+            return {
+                qid: self._apply_calibration(q, raw[qid])
+                for qid, q in questions.items()
+            }
         finally:
             del self._request_views, self._request_rendered_tokens
 
@@ -583,6 +644,154 @@ class SystemOneEngine:
             )
         return NoulAnswer(noul=probs[1])  # render order is [no, yes]
 
+    @staticmethod
+    def _workload_name_ok(name) -> bool:
+        return (
+            isinstance(name, str)
+            and 0 < len(name) <= 64
+            and all(c.isalnum() or c in "-_.:" for c in name)
+        )
+
+    @staticmethod
+    def _workload_artifact_digest(artifact: dict) -> str:
+        body = {key: value for key, value in artifact.items() if key != "sha256"}
+        return hashlib.sha256(dumps(body, sort_keys=True).encode()).hexdigest()
+
+    def _register_workload_artifact(self, artifact: dict, path: str | None = None):
+        """Admit a per-workload calibration artifact; every check fails closed."""
+        origin = f" ({path})" if path else ""
+        if (
+            not isinstance(artifact, dict)
+            or artifact.get("format_version") != 1
+            or artifact.get("method") != WORKLOAD_METHOD
+        ):
+            raise ValueError(f"not a per-workload calibration artifact{origin}")
+        if artifact.get("prediction_config") != self._expected_prediction_config:
+            raise ValueError(
+                "workload calibration does not match "
+                f"model/tokenizer/readout/runtime configuration{origin}"
+            )
+        name = artifact.get("workload")
+        if not self._workload_name_ok(name):
+            raise ValueError(f"invalid workload name{origin}")
+        if path is not None and name in self._workload_calibrations:
+            raise ValueError(f"duplicate workload calibration: {name}{origin}")
+        fits = artifact.get("fits")
+        if not isinstance(fits, dict) or not fits:
+            raise ValueError(f"workload calibration has no fits{origin}")
+        for primitive, fit in fits.items():
+            if primitive not in ("choice", "noul", "score"):
+                raise ValueError(f"invalid calibration primitive{origin}")
+            temperature_scale([0.5, 0.5], fit["temperature"])
+        if artifact.get("sha256") != self._workload_artifact_digest(artifact):
+            raise ValueError(f"workload calibration failed its integrity hash{origin}")
+        if (
+            name not in self._workload_calibrations
+            and len(self._workload_calibrations) >= self.max_workload_calibrations
+        ):
+            raise ValueError(
+                f"workload calibration capacity ({self.max_workload_calibrations}) reached"
+            )
+        self._workload_calibrations[name] = artifact
+
+    def fit_workload(self, request: dict) -> dict:
+        """Fit and register per-primitive temperatures for one named workload.
+
+        Scores each labeled example through the exact serving path (raw plus
+        contextual correction, before any temperature), fits scalar temperatures
+        per primitive, and registers the artifact for `"calibration": name`
+        requests. Diagnostics are in-sample and optimistic; the resampled
+        evidence for the method is EXPERIMENTS section 15. Runs on the model
+        thread and blocks other requests for its duration.
+        """
+        if not isinstance(request, dict):
+            raise RequestValidationError("request must be an object")
+        name = request.get("workload")
+        if not self._workload_name_ok(name):
+            raise RequestValidationError(
+                "workload must be 1-64 characters of letters, digits, '-', '_', '.', ':'"
+            )
+        examples = request.get("examples")
+        if not isinstance(examples, list) or not examples:
+            raise RequestValidationError("examples must be a nonempty array")
+        if len(examples) > self.max_calibration_examples:
+            raise RequestLimitError(
+                f"at most {self.max_calibration_examples} calibration examples are allowed"
+            )
+        if (
+            name not in self._workload_calibrations
+            and len(self._workload_calibrations) >= self.max_workload_calibrations
+        ):
+            raise RequestLimitError(
+                f"workload calibration capacity ({self.max_workload_calibrations}) "
+                "reached; refit an existing workload or restart with more capacity"
+            )
+        rows_by_primitive: dict[str, list[dict]] = {}
+        canonical = []
+        for position, item in enumerate(examples):
+            if not isinstance(item, dict) or not {"state", "question", "label"} <= set(item):
+                raise RequestValidationError(
+                    f"examples[{position}] must be an object with state, question, and label"
+                )
+            spec = item["question"]
+            if not isinstance(spec, dict):
+                raise RequestValidationError(f"examples[{position}].question must be an object")
+            try:
+                question = Question(**spec)
+                index = label_to_target_index(question, item["label"])
+            except (ValueError, TypeError) as exc:
+                raise RequestValidationError(f"examples[{position}]: {exc}") from exc
+            self._check_deadline()
+            probs = self._pretemperature_distributions(
+                item["state"], {"q": question}
+            )["q"]
+            target = [0.0] * len(question.answer_keys)
+            target[index] = 1.0
+            rows_by_primitive.setdefault(question.type, []).append(
+                {"probabilities": probs, "target": target}
+            )
+            canonical.append(
+                [
+                    item["state"],
+                    {
+                        "type": question.type,
+                        "instructions": question.instructions,
+                        "criteria": question.criteria,
+                    },
+                    item["label"],
+                ]
+            )
+        try:
+            fits, diagnostics = build_workload_fits(
+                rows_by_primitive, self.min_calibration_examples
+            )
+        except ValueError as exc:
+            raise RequestValidationError(str(exc)) from exc
+        artifact = {
+            "format_version": 1,
+            "method": WORKLOAD_METHOD,
+            "workload": name,
+            "created_unix": int(time.time()),
+            "serving_model_id": self.served_model_id,
+            "prediction_config": self._expected_prediction_config,
+            "examples": {
+                "count": len(examples),
+                "sha256": hashlib.sha256(dumps(canonical).encode()).hexdigest(),
+            },
+            "fits": fits,
+            "diagnostics": diagnostics,
+            "limitations": (
+                "In-sample diagnostics on this workload's labeled sample; valid "
+                "only for this serving identity and workload. An at-bound or "
+                "insufficient primitive is diagnosed, never applied. A scalar "
+                "temperature cannot repair rank errors (verdict "
+                "structural_warning): widen escalation instead."
+            ),
+        }
+        artifact["sha256"] = self._workload_artifact_digest(artifact)
+        self._register_workload_artifact(artifact)
+        return artifact
+
     def respond(self, request: dict) -> dict:
         """Serve a Jev-shaped request and return a Jev-shaped response.
 
@@ -612,9 +821,12 @@ class SystemOneEngine:
             questions = {qid: Question(**spec) for qid, spec in specs.items()}
         except (ValueError, TypeError) as exc:
             raise RequestValidationError(str(exc)) from exc
+        workload = request.get("calibration")
+        if workload is not None and not isinstance(workload, str):
+            raise RequestValidationError("calibration must be a workload name")
         start_tokens = self._input_tokens
-        answers = self.ask(request["state"], questions)
-        return {
+        answers = self.ask(request["state"], questions, workload=workload)
+        response = {
             "model": getattr(self, "served_model_id", self.model_name),
             "answers": {qid: asdict(a) for qid, a in answers.items()},
             "usage": {
@@ -622,3 +834,9 @@ class SystemOneEngine:
                 "output_tokens": 0,
             },
         }
+        if workload is not None:
+            response["calibration"] = {
+                "workload": workload,
+                "sha256": self._workload_calibrations[workload]["sha256"],
+            }
+        return response

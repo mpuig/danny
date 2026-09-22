@@ -27,6 +27,21 @@ def main():
     ap.add_argument("--renderer", choices=RENDERER_VERSIONS)
     ap.add_argument("--readout", choices=READOUT_VERSIONS)
     ap.add_argument("--temperature")
+    ap.add_argument(
+        "--workload-calibration",
+        action="append",
+        default=[],
+        help="per-workload calibration artifact (repeatable); identity-checked, fail-closed",
+    )
+    ap.add_argument("--max-workload-calibrations", type=int, default=16)
+    ap.add_argument("--min-calibration-examples", type=int, default=25)
+    ap.add_argument("--max-calibration-examples", type=int, default=256)
+    ap.add_argument(
+        "--fit-timeout",
+        type=float,
+        default=120,
+        help="deadline for POST /v1/calibrations jobs; fits block other requests",
+    )
     ap.add_argument("--confidence", choices=SCHEMES)
     ap.add_argument(
         "--calibrate",
@@ -74,7 +89,7 @@ def main():
     ):
         if getattr(args, name) < 1:
             ap.error(f"{name} must be positive")
-    for name in ("request_timeout", "io_timeout"):
+    for name in ("request_timeout", "io_timeout", "fit_timeout"):
         value = getattr(args, name)
         if not math.isfinite(value) or value <= 0:
             ap.error(f"{name} must be finite and positive")
@@ -102,10 +117,17 @@ def main():
             temperature_path=args.temperature,
             confidence_scheme=args.confidence,
             mlx_cache_limit_bytes=args.mlx_cache_limit_mb * 1024 * 1024,
+            workload_calibration_paths=args.workload_calibration,
+            max_workload_calibrations=args.max_workload_calibrations,
+            min_calibration_examples=args.min_calibration_examples,
+            max_calibration_examples=args.max_calibration_examples,
         )
 
     worker = InferenceWorker(
-        factory, capacity=args.queue_capacity, timeout=args.request_timeout
+        factory,
+        capacity=args.queue_capacity,
+        timeout=args.request_timeout,
+        fit_timeout=args.fit_timeout,
     )
     server = None
     try:
