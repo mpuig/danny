@@ -68,9 +68,15 @@ def request(port, method, path, payload=None):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
     try:
         body = json.dumps(payload).encode() if payload is not None else None
-        connection.request(
-            method, path, body=body, headers={"Content-Type": "application/json"}
-        )
+        try:
+            connection.request(
+                method, path, body=body, headers={"Content-Type": "application/json"}
+            )
+        except (BrokenPipeError, ConnectionResetError):
+            # The server pre-admits on Content-Length and may close its read
+            # side before the client finishes sending a large body; the
+            # rejection response can already be on the wire.
+            pass
         response = connection.getresponse()
         data = json.loads(response.read())
         return {

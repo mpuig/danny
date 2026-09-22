@@ -168,6 +168,20 @@ reusing its port, or choose an unused port.
 | SmolLM candidate pilot | `HuggingFaceTB/SmolLM2-135M` | `adapters/smollm2-135m-readout-pilot-candidate-v1` | Experimental independent Score levels and wide Choice |
 | SmolLM 3B gold | `mlx-community/SmolLM3-3B-Base-bf16` | `adapters/smollm3-3b` | Historical legacy-v0 model |
 | SmolLM 3B distilled | `mlx-community/SmolLM3-3B-Base-bf16` | `adapters/smollm3-3b-distill` | Historical legacy-v0 distillation experiment |
+| MiniCPM v1, filtered synth+RPS | `openbmb/MiniCPM5-2B-Base` | `adapters/minicpm5-2b-structured-v1-synthfiltered-rps` | Scale-up reference (experiments §11) |
+| MiniCPM patch1 | `openbmb/MiniCPM5-2B-Base` | `adapters/minicpm5-2b-sfr-patch1` | Experimental record of the null patch pass (decision 26); not a replacement |
+
+### Fused and quantized MiniCPM weights
+
+`models/minicpm5-2b-sfr-fused` (BF16, 4.7 GB), `-q8` (2.5 GB), and `-q4` (1.3 GB)
+are full-weight variants of the MiniCPM reference adapter, launched with `--model
+models/minicpm5-2b-sfr-q8` and **no `--adapter`**. They are git-ignored artifacts;
+rebuild with `mlx_lm fuse` on the reference adapter, then `mlx_lm convert -q
+--q-bits 8|4`. q8 measured quality-free with a median 1.61x serving speedup
+(experiments §13, decision 27), but the BF16-fitted temperature files belong to a
+different artifact identity and will fail closed: do not pass them via
+`--temperature`. Until temperatures are refit for the fused-q8 identity, quantized
+serving is uncalibrated-raw only.
 
 The letter-readout pilot and four `smollm2-135m-teacher-matched-*` adapters are also
 local experiment controls, not better validated replacements for the selected Qwen.

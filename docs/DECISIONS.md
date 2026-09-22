@@ -363,3 +363,38 @@ result, if adopted, becomes a new recipe version by decision entry):
    known missing-evidence overconfidence, mitigated by the filter-v2 criteria
    applied to the patch batch as well.
 
+
+## 27. Post-training quantization of the MiniCPM serving weights
+
+Status: **measured 2026-09-22; q8 flagged adoption-worthy; adoption blocked on a
+temperature refit; nothing adopted yet.**
+
+Question: can quantization improve serving speed without giving up the calibrated
+quality that justified the MiniCPM scale-up? Method: fuse the scale-up LoRA into
+the base, convert to q8 and q4 with mlx_lm, then run the full battery — dev and
+synthetic-eval quality, shared-versus-independent drift gates at three precisions,
+and the 16-case HTTP serving sweep — against the BF16 adapter baseline.
+
+Result (experiments section 13): q8 is quality-free (dev 86.6% vs 86.8%, ECE 0.018
+vs 0.018, confident errors unchanged) at half the footprint (2.5 GB vs 4.7 GB) and
+a median 1.61x serving speedup. q4 trades ~1.4 accuracy points for a 1.3 GB
+footprint but is *not* faster than q8 here (median 1.47x; slower on 12 of 16
+cells), so it earns no serving tier of its own on this machine. Drift gates: zero
+argmax flips for both; q4 needs FP16+ accumulation to keep shared-mode drift small,
+and the FP32 gate on shared execution stays in force for all weight formats.
+
+Why not adopted immediately: both quality batteries reused the BF16-fitted
+per-primitive temperatures. The quantized model is a different artifact identity,
+and the fail-closed calibration provenance policy exists precisely so a temperature
+fitted on one set of weights is never served on another. Prerequisites for
+adoption, in order: (1) refit per-primitive temperatures on the calibration split
+under the fused-q8 identity; (2) re-run the calibrated dev battery and the official
+TypeScript SDK smoke test against the q8 server; (3) record the refit hashes in the
+serving identity endpoint. If the refit battery holds, q8 becomes the recommended
+serving format by a follow-up entry; the BF16 adapter remains the training and
+reference artifact regardless.
+
+Cross-reference: SemIf independently flags its quantized 27B bridge as experimental
+due to "numerical differences in quantized execution"; our drift gate measures that
+effect (max probability drift 0.0035 q8 / 0.031 q4-native) rather than treating it
+as a qualitative caveat.

@@ -379,3 +379,67 @@ synthetic NLL -0.035 [-0.078,+0.007]). The technique that halved kev's 8.7%
 confident errors found nothing to halve at our 2.2% starting point. Not adopted;
 no regression. Adapter versioned as minicpm5-2b-sfr-patch1; reports data/runs/patch-v1/.
 
+## 13. MiniCPM serving and post-training quantization (2026-09-22)
+
+Same M4 Max machine and 16-case sweep as section 8, on the MiniCPM scale-up
+adapter. Reports: `data/runs/minicpm-v1/serving-*` and `data/runs/quant-v1/`.
+
+**BF16 adapter serving baseline (native independent).** Twelve questions, longer
+state, three options, concurrency one: p50 4,016 ms; the light case (3 questions,
+short state, 3 options) p50 358 ms. All 16 cases returned 200s with zero
+single-versus-multi drift; admission probes 413/422/422; clean shutdown.
+
+**FP32 shared sweep: partially contention-corrupted.** Three rows overlapped
+background quantization work and show inflated p95s with physically implausible
+orderings (a 16-repetition state finishing 2x faster than the same case at one
+repetition): `3q/16rep/26opt/cc4`, `12q/1rep/3opt/cc1`, `12q/1rep/26opt/cc1`.
+Treat those rows as unreliable; the sweep was not rerun. Clean rows still show the
+shared-mode gain: 12 questions/16 repetitions at p50 1,167 ms (3 options) and
+2,824 ms (26 options) versus 4,016/4,806 ms native independent.
+
+**Quantization chain.** The adapter was fused into the base
+(`models/minicpm5-2b-sfr-fused`, 4.7 GB) and converted with mlx_lm to q8
+(8.501 bits/weight, 2.5 GB) and q4 (4.501 bits/weight, 1.3 GB). Fused sanity on a
+200-example dev subset: 86.0% accuracy, matching the adapter path. Full dev battery
+(n=1,128), evaluated with the BF16-fitted temperatures (see the adoption caveat):
+
+| Variant | Accuracy | ECE | NLL | Score acc | Confident errors t>=0.9 / t>=0.95 |
+|---|---:|---:|---:|---:|---:|
+| BF16 adapter | 86.8% | 0.018 | 0.326 | 67.3% | 2.2% / 1.5% |
+| q8 | 86.6% | 0.018 | 0.327 | 65.9% | 2.0% / 1.5% |
+| q4 | 85.2% | 0.020 | 0.360 | 64.2% | 2.7% / 0.8% |
+
+q8 is indistinguishable from BF16 on every overall metric. q4 costs about 1.4
+accuracy points (concentrated in Score) with calibration intact; on the held-out
+synthetic eval q4 scored 77.3%/ECE 0.062 versus BF16's 75.8%/0.057 (n=256, within
+noise). No new reserved-test look was spent; these are dev/synthetic comparisons.
+
+**Drift gates.** Zero argmax flips for both variants across native/FP16/FP32
+shared-versus-independent fixtures. Max probability drift: q8 0.0035 (native),
+q4 0.031 native shrinking to 0.0037 FP16 and 1.4e-6 FP32. The FP32 gate on shared
+execution therefore remains required for quantized weights, same as for BF16.
+This mirrors SemIf's independent report of numerical caveats on its quantized
+27B bridge; our gate quantifies the effect instead of flagging it qualitatively.
+
+**Serving sweeps (native independent, fixed benchmark client).** Median p50
+speedup over the BF16 adapter across all 16 matched cases: **q8 1.61x, q4 1.47x**
+(light case ~1.9x: 358 -> 195/191 ms). Every case passed parity with zero drift,
+and both grids returned 413/422/422 admission probes. The expected extra bandwidth
+advantage of 4-bit did not materialize: q8 was as fast as or faster than q4 on 12
+of 16 cells, so q4's only remaining advantage is its 1.3 GB footprint.
+
+**Benchmark client defect found and fixed.** The oversized-body probe raced the
+server's pre-admission close: the server sends 413 and closes without draining the
+262,144-byte body, and the client hit BrokenPipeError mid-send before reading the
+response. `benchmark_service.py` now reads the response already on the wire when
+the send fails that way. The q4 probe result was revalidated post-fix
+(`serving-q4-probes`, validation_pass true); the q8 sweep ran entirely under the
+fixed client. Server behavior was correct throughout.
+
+**Adoption status: flagged, not adopted (decision 27).** Both dev batteries reused
+the BF16-fitted per-primitive temperatures. Quantization changes the artifact
+identity, so the provenance-bound calibration fails closed at serving time by
+design. Adopting q8 for serving requires refitting temperatures on the calibration
+split under the fused-q8 identity and repeating the SDK smoke test before any
+calibrated claim.
+

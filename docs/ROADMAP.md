@@ -34,6 +34,15 @@ stable default; shared execution is opt-in. FP32 shared tests reduced drift belo
 0.00001 on the measured fixtures. See [Experiments](EXPERIMENTS.md). Production
 serving acceptance still requires broader quality and load tests.
 
+**Current decision point: serving tiers.** The MiniCPM scale-up won selection
+(experiments §11), its patch pass was a clean null (§12), and quantization is
+measured (§13): q8 is quality-free at 2x smaller and a median 1.61x faster; q4
+buys only footprint. The pending choice is the serving tier lineup — e.g., Qwen
+0.6B BF16 for the small tier, MiniCPM q8 for the quality tier — which first
+requires the decision-27 temperature refit for the fused-q8 identity, and then a
+documented latency/quality/footprint policy per tier rather than a single
+recommended adapter.
+
 ## Destination
 
 A small fine-tuned model based on an existing SmolLM/Qwen-style backbone, with
