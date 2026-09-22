@@ -420,7 +420,7 @@ Fresh real-model benchmark runs verified clean SIGTERM exits, and a lifecycle te
 verifies inherited SIGINT handling. Selected Qwen also passed the SDK test with its
 fitted temperature; 24 development predictions matched archived probabilities exactly.
 
-The implementation closeout (`0f207b3`) passed all **67 Python tests** with model,
+The implementation closeout (`c7a1934`) passed all **67 Python tests** with model,
 training, and candidate opt-ins enabled; Ruff, compile checks, the then-existing
 20 CLI help commands, and Markdown link/fence/shell checks also passed. The later
 cached-teacher benchmark and live refresh each add five unit tests, plus recorded

@@ -1,0 +1,60 @@
+{
+  "format_version": 1,
+  "method": "per-primitive-temperature-v1",
+  "prediction_config": {
+    "renderer_version": "structured-v1",
+    "readout_version": "letters-v1",
+    "precision": "native",
+    "execution_mode": "independent",
+    "max_batch_size": 4,
+    "contextual_correction": false,
+    "backbone_files": {
+      "config.json": "9164298a5b758bf0de48d26dde8ca77fcc6937f1f08130aca1e102a45f965d5b",
+      "generation_config.json": "9ac4f32e5f32358697a9f438a3ea89ef80e6ba786c72c49e932f9f21c122fdb1",
+      "model.safetensors": "d5b92c4039d1aafaae9a675696ed584d540ee24ec00204ae7a654c408e84afe5",
+      "model.safetensors.index.json": "50747e37090508f851cdea2f4d5a71c59c2a26a09c8e95c505371ac669e2ac36",
+      "tokenizer.json": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+      "tokenizer_config.json": "e93eb72626777b804b87f293e7c9907eb617924c9ca209f8b15f4a17a943cc20"
+    },
+    "adapter_sha256": null
+  },
+  "data_sha256": "9cb943edb80814ef929aa763a5c4a45d31e1ec0bd1006dc5cc8dde662913d141",
+  "data_manifest_sha256": "2b0194bdd3f93d399ef5f8b73cc2acdbea02962782d35c1cb3c3ed01144e1c43",
+  "predictions_sha256": "c5ed39797795b2444b523e162ed2f40fb8d6a8c302f5adb8051361073b19c69e",
+  "fits": {
+    "choice": {
+      "temperature": 0.9606631703716453,
+      "n": 398,
+      "nll_before": 0.24501740677712577,
+      "nll_after": 0.24468963477901343,
+      "at_bound": false,
+      "bounds": [
+        0.05,
+        20
+      ]
+    },
+    "noul": {
+      "temperature": 1.0727473556553015,
+      "n": 505,
+      "nll_before": 0.19267236839533783,
+      "nll_after": 0.19209463010448694,
+      "at_bound": false,
+      "bounds": [
+        0.05,
+        20
+      ]
+    },
+    "score": {
+      "temperature": 1.3865852376299352,
+      "n": 200,
+      "nll_before": 1.0064736876090097,
+      "nll_after": 0.9695312446165102,
+      "at_bound": false,
+      "bounds": [
+        0.05,
+        20
+      ]
+    }
+  },
+  "limitations": "Outcome calibration on the declared partition, not a guarantee under task/domain shift. Confidence statistics are separate."
+}

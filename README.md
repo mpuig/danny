@@ -27,6 +27,44 @@ The model should answer narrow, request-defined questions about structured state
 using **Choice / Score / Noul** probabilities, without generating text. Code owns
 workflow logic; the model supplies semantic judgments and useful uncertainty.
 
+## Quickstart
+
+Requires **Apple Silicon** (MLX) and [uv](https://docs.astral.sh/uv/).
+
+```bash
+git clone https://github.com/mpuig/danny && cd danny
+uv sync
+
+# volume tier (0.6B): fetch the adapter + its temperature file from the
+# HuggingFace release, then:
+uv run python scripts/serve.py --model Qwen/Qwen3-0.6B \
+  --adapter adapters/qwen3-0.6b-structured-v1-synthfiltered-rps \
+  --temperature release/temperature-qwen3-0.6b.json --port 8399
+
+# ask three typed questions in one request:
+curl -s -X POST http://127.0.0.1:8399/v1/systemone \
+  -H "Content-Type: application/json" -d '{
+  "state": "I was charged twice for my flight and nobody answers the phone.",
+  "questions": {
+    "refund":      {"type": "noul",   "instructions": "Does the customer want money back?"},
+    "route":       {"type": "choice", "instructions": "Which queue should handle this?",
+                    "criteria": {"billing": "Payment issues.", "support": "Everything else."}},
+    "frustration": {"type": "score",  "instructions": "How frustrated is the customer?",
+                    "criteria": ["Calm.", "Annoyed.", "Angry."]}}}'
+```
+
+The quality tier (MiniCPM5-2B fused to 8-bit, +6.8 accuracy points on the fresh
+reserved test) is on HuggingFace with its own temperature file; see
+`release/MODEL_CARD_minicpm5-2b-q8.md`. Per-workload calibration — fitting
+temperatures to *your* traffic from ~100 labeled decisions — is one call:
+`POST /v1/calibrations` (see [docs/SERVING.md](docs/SERVING.md)).
+
+**Not affiliated with or endorsed by TypeSafe.** "Jev-compatible" describes the
+request/answer shape (the official TypeScript SDK runs against this server
+unchanged in smoke tests), not certified behavioral equivalence. Training data
+targets include outputs from a pinned Jev API version; this is disclosed in the
+model cards. Code is MIT-licensed; base models keep their own licenses.
+
 ## Current status
 
 The repository contains a **Python/Apple MLX research prototype**, not a

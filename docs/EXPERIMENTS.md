@@ -104,7 +104,7 @@ live-teacher collection still requires a chosen model version and approved budge
 
 ## 4. First matched backbone training results
 
-Frozen code `520038f`; all 8,769 training and 1,128 development questions passed
+Frozen code `c280e52`; all 8,769 training and 1,128 development questions passed
 both tokenizers' 768-token admission check (no exclusions). Each backbone trained
 one epoch, batch 8, learning rate 5e-5, seed 42, rank-16 attention LoRA. Exactly
 8,769 example presentations and 1,097 optimizer steps each. Native independent
@@ -135,7 +135,7 @@ argmax agreement, and Noul MAE, separate from outcome correctness.
 
 ## 5. Learning-rate control, calibration, and unseen rubrics
 
-Follow-up code was frozen at `b7d5932`. Qwen at **1e-5**, with the same 8,769
+Follow-up code was frozen at `37a5c18`. Qwen at **1e-5**, with the same 8,769
 presentations / 1,097 steps, reached **81.3% development accuracy**, NLL **0.460**,
 Brier **0.256**, and ECE **0.033**. It was selected by minimum development NLL among
 untuned, 5e-5, and 1e-5 variants, before rubric evaluation. The result does not show
@@ -230,7 +230,7 @@ still needs an approved provider/version/budget.
 ## 8. Bounded HTTP serving measurements
 
 Apple **M4 Max, 36 GiB unified memory**, without concurrent model training. Full
-sweep code: `2fcffe0`; lifecycle/configuration follow-up: `64313c7`. These runs use
+sweep code: `64f4491`; lifecycle/configuration follow-up: `54fb743`. These runs use
 the trained adapters (unmerged LoRA), not the bare backbones from section 1.
 Each backbone/policy ran 16 cases: 3/12 mixed questions, 1/16 repeated state
 messages, 3/26 Choice options, and concurrency 1/4, with 20 warm requests per case.

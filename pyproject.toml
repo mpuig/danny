@@ -2,7 +2,13 @@
 name = "danny"
 version = "0.1.0"
 description = "danny — an open-source System One model, named for Danny Kahneman: calibrated typed decisions (choice/score/noul) via logit readout on small fine-tuned LLMs, built on Apple MLX"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [{name = "Marc Puig", email = "marc.puig@gmail.com"}]
 requires-python = ">=3.11"
+
+[project.urls]
+Repository = "https://github.com/mpuig/danny"
 dependencies = [
     "mlx-lm>=0.22",
     "datasets>=3.0",

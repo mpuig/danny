@@ -1,0 +1,61 @@
+{
+  "format_version": 1,
+  "method": "per-primitive-temperature-v1",
+  "prediction_config": {
+    "renderer_version": "structured-v1",
+    "readout_version": "letters-v1",
+    "precision": "native",
+    "execution_mode": "independent",
+    "max_batch_size": 4,
+    "contextual_correction": false,
+    "backbone_files": {
+      "config.json": "660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd",
+      "generation_config.json": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2",
+      "merges.txt": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+      "model.safetensors": "f47f71177f32bcd101b7573ec9171e6a57f4f4d31148d38e382306f42996874b",
+      "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+      "tokenizer_config.json": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
+      "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    },
+    "adapter_sha256": "c3e1c86f703e19417d84d89b6860d117cb89925a449faac52d3ca9cc31c2b642"
+  },
+  "data_sha256": "9cb943edb80814ef929aa763a5c4a45d31e1ec0bd1006dc5cc8dde662913d141",
+  "data_manifest_sha256": "2b0194bdd3f93d399ef5f8b73cc2acdbea02962782d35c1cb3c3ed01144e1c43",
+  "predictions_sha256": "b42d0630a083a8ef5be8a74b3592cf829d204a5e9ed620a80e1c3bf0c04662e8",
+  "fits": {
+    "choice": {
+      "temperature": 1.019371194771605,
+      "n": 398,
+      "nll_before": 0.3450341671953664,
+      "nll_after": 0.3449450116540519,
+      "at_bound": false,
+      "bounds": [
+        0.05,
+        20
+      ]
+    },
+    "noul": {
+      "temperature": 1.1564577966293415,
+      "n": 505,
+      "nll_before": 0.2612546318445671,
+      "nll_after": 0.2582613154032484,
+      "at_bound": false,
+      "bounds": [
+        0.05,
+        20
+      ]
+    },
+    "score": {
+      "temperature": 1.0562940109111,
+      "n": 200,
+      "nll_before": 1.0251830938488318,
+      "nll_after": 1.0244701826788658,
+      "at_bound": false,
+      "bounds": [
+        0.05,
+        20
+      ]
+    }
+  },
+  "limitations": "Outcome calibration on the declared partition, not a guarantee under task/domain shift. Confidence statistics are separate."
+}

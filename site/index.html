@@ -1,0 +1,510 @@
+<title>danny</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --paper: #f2f5f7;
+    --card: #ffffff;
+    --ink: #17222c;
+    --muted: #5b6b79;
+    --line: #d7dee4;
+    --accent: #0d6b6b;
+    --accent-soft: #d9eae9;
+    --contrast: #b25f0a;
+    --contrast-soft: #f3e4d0;
+    --good: #2e7d43;
+    --good-soft: #ddeee2;
+    --warn: #a05a00;
+    --warn-soft: #f6e8d4;
+    --retired: #5b6b79;
+    --retired-soft: #e4e9ed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #101820; --card: #182430; --ink: #e6edf2; --muted: #93a4b2;
+      --line: #2c3b48; --accent: #3aa8a5; --accent-soft: #143433;
+      --contrast: #e0a252; --contrast-soft: #3a2c17;
+      --good: #6bbd81; --good-soft: #1c332a; --warn: #dfa04d; --warn-soft: #38290f;
+      --retired: #93a4b2; --retired-soft: #212f3c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #101820; --card: #182430; --ink: #e6edf2; --muted: #93a4b2;
+    --line: #2c3b48; --accent: #3aa8a5; --accent-soft: #143433;
+    --contrast: #e0a252; --contrast-soft: #3a2c17;
+    --good: #6bbd81; --good-soft: #1c332a; --warn: #dfa04d; --warn-soft: #38290f;
+    --retired: #93a4b2; --retired-soft: #212f3c;
+  }
+
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16.5px; line-height: 1.62;
+    padding-inline: 20px; padding-block: 0 72px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  .prose { max-width: 700px; }
+
+  h1, h2, h3 { font-family: "Archivo", "Helvetica Neue", Arial, sans-serif; text-wrap: balance; line-height: 1.12; }
+  h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); font-weight: 800; letter-spacing: -0.015em; margin: 0.4em 0 0.35em; }
+  h2 { font-size: 1.55rem; font-weight: 800; margin: 0 0 0.6em; letter-spacing: -0.01em; }
+  h3 { font-size: 1.02rem; font-weight: 700; margin: 1.6em 0 0.5em; }
+  p { margin: 0 0 1em; }
+  a { color: var(--accent); }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5em;
+  }
+  section { margin-top: 76px; }
+  header.hero { padding-top: 48px; }
+  .lede { font-size: 1.15rem; color: var(--muted); max-width: 660px; }
+  code, .mono { font-family: "IBM Plex Mono", monospace; font-size: 0.86em; }
+  code { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 0.1em 0.35em; }
+  .caveat { font-size: 0.8rem; color: var(--muted); margin-top: 10px; max-width: 700px; }
+
+  /* hero answer demo */
+  .answer-demo { margin-top: 34px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .answer-demo .req { padding: 14px 18px; border-bottom: 1px solid var(--line); font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .answer-demo .req strong { color: var(--ink); font-weight: 600; }
+  .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .answer { padding: 16px 18px 18px; border-top: 1px solid var(--line); }
+  @media (min-width: 760px) { .answer { border-top: 0; } .answer + .answer { border-left: 1px solid var(--line); } }
+  .answer .qid { font-family: "IBM Plex Mono", monospace; font-size: 0.74rem; color: var(--muted); margin-bottom: 8px; }
+  .dist { display: grid; gap: 6px; }
+  .dist .row { display: grid; grid-template-columns: 92px 1fr 46px; gap: 8px; align-items: center; }
+  .dist .lbl { font-family: "IBM Plex Mono", monospace; font-size: 0.74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dist .bar { height: 10px; border-radius: 3px; background: var(--accent-soft); position: relative; }
+  .dist .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); }
+  .dist .val { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 0.76rem; text-align: right; color: var(--muted); }
+  .demo-note { padding: 10px 18px; font-size: 0.78rem; color: var(--muted); border-top: 1px solid var(--line); }
+
+  /* stat tiles */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 26px 0 8px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .stat .v { font-family: "Archivo", sans-serif; font-weight: 800; font-size: 2rem; letter-spacing: -0.01em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat .k { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+  /* charts */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 18px; }
+  .panel h3 { margin-top: 0; }
+  .panel .sub { color: var(--muted); font-size: 0.85rem; margin: -2px 0 14px; }
+  .chartwrap { overflow-x: auto; }
+  svg text { font-family: "IBM Plex Mono", monospace; font-size: 11px; fill: var(--muted); }
+  svg .lbl-strong { fill: var(--ink); font-weight: 600; }
+  #tooltip {
+    position: fixed; pointer-events: none; background: var(--ink); color: var(--paper);
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; padding: 6px 9px;
+    border-radius: 6px; z-index: 10; white-space: nowrap;
+  }
+
+  /* horizontal bar rows (per-primitive) */
+  .hbars { display: grid; gap: 12px; }
+  .hbar { display: grid; grid-template-columns: 70px 1fr 118px; gap: 12px; align-items: center; }
+  .hbar .name { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; }
+  .hbar .track { height: 14px; background: var(--paper); border-radius: 4px; position: relative; }
+  .hbar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); }
+  .hbar .fill.attn { background: var(--contrast); }
+  .hbar .num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 0.78rem; color: var(--muted); }
+  .duo { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .duo { grid-template-columns: 1fr 1fr; } }
+
+  /* comparison lanes */
+  .compare { display: grid; gap: 18px; grid-template-columns: 1fr; margin: 26px 0; }
+  @media (min-width: 760px) { .compare { grid-template-columns: 1fr 1fr; } }
+  .lane { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+  .lane .tag { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-bottom: 14px; }
+  .lane.llm .tag { background: var(--contrast-soft); color: var(--contrast); }
+  .lane.s1 .tag { background: var(--accent-soft); color: var(--accent); }
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .steps li { position: relative; padding: 9px 0 9px 26px; font-size: 0.92rem; }
+  .steps li::before { content: ""; position: absolute; left: 7px; top: 17px; width: 8px; height: 8px; border-radius: 50%; }
+  .steps li:not(:last-child)::after { content: ""; position: absolute; left: 10.5px; top: 27px; bottom: -9px; width: 1.5px; background: var(--line); }
+  .lane.llm .steps li::before { background: var(--contrast); }
+  .lane.s1 .steps li::before { background: var(--accent); }
+  .steps .sub { display: block; color: var(--muted); font-size: 0.8rem; }
+
+  /* primitives */
+  .prims { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 22px; }
+  @media (min-width: 760px) { .prims { grid-template-columns: repeat(3, 1fr); } }
+  .prim { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .prim .name { font-family: "IBM Plex Mono", monospace; font-weight: 600; color: var(--accent); font-size: 0.9rem; }
+  .prim .q { font-weight: 600; margin: 6px 0; font-size: 0.95rem; }
+  .prim .ret { color: var(--muted); font-size: 0.84rem; }
+
+  /* recipe facts */
+  .facts { display: grid; gap: 0; margin-top: 10px; border-top: 1px solid var(--line); }
+  .fact { display: grid; grid-template-columns: 190px 1fr; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  @media (max-width: 620px) { .fact { grid-template-columns: 1fr; gap: 4px; } }
+  .fact dt { font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+  .fact dd { margin: 0; font-size: 0.94rem; }
+
+  /* timeline */
+  .timeline { list-style: none; margin: 26px 0 0; padding: 0; position: relative; }
+  .timeline::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+  .tl { position: relative; padding: 0 0 26px 34px; }
+  .tl::before { content: ""; position: absolute; left: 0; top: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 3px solid var(--paper); }
+  .tl.setback::before { background: var(--contrast); }
+  .tl .when { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .tl .what { font-weight: 700; font-family: "Archivo", sans-serif; font-size: 1.02rem; margin: 2px 0 4px; }
+  .tl .how { color: var(--muted); font-size: 0.9rem; max-width: 640px; }
+  .tl .chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-family: "IBM Plex Mono", monospace; font-size: 0.74rem; font-variant-numeric: tabular-nums; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; }
+  .chip.down { background: var(--contrast-soft); color: var(--contrast); }
+
+  /* honesty ledger cards */
+  .ledger { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 22px; }
+  @media (min-width: 760px) { .ledger { grid-template-columns: 1fr 1fr; } }
+  .lcard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .lcard .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .lcard .t { font-weight: 700; font-size: 0.95rem; }
+  .lcard .d { color: var(--muted); font-size: 0.86rem; margin-top: 6px; }
+  .badge { font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .badge.fixed { background: var(--good-soft); color: var(--good); }
+  .badge.open { background: var(--warn-soft); color: var(--warn); }
+  .badge.retired { background: var(--retired-soft); color: var(--retired); }
+
+  /* tables */
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  .tablewrap { overflow-x: auto; margin: 18px 0 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th { border-top: 0; font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  /* next steps */
+  .next { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+  .next li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: baseline; }
+  .next .k { font-family: "IBM Plex Mono", monospace; font-size: 0.74rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .next .why { color: var(--muted); font-size: 0.85rem; display: block; margin-top: 2px; }
+
+  footer { margin-top: 84px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.82rem; }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">danny · working notes · ~/code/danny · September 2026</p>
+  <h1>danny: rebuilding Jev in the open</h1>
+  <p class="lede">Kahneman called System 1 "a machine for jumping to conclusions." Typesafe built one — Jev answers typed questions about text with calibrated probabilities instead of generated prose — and published no paper on how it works. <strong>danny</strong> (named for Danny Kahneman, whose System 1 this tries to be) reconstructs that behavior from public evidence on small open models, on a Mac, one measured experiment at a time: a machine for jumping to conclusions, <em>carefully</em>. The end state is a two-tier lineup — a 2.5B quality model quantized to 8-bit and a 0.6B volume model, both frozen, calibrated, and drop-in compatible with the official SDK. This page is the result, the mechanism, and the story — including what broke.</p>
+
+  <div class="answer-demo">
+    <div class="req">
+      <span><strong>state</strong> "I've been charged twice for my flight to Berlin… I want my money back immediately."</span>
+      <span><strong>questions</strong> 3</span>
+      <span><strong>output tokens</strong> 0</span>
+    </div>
+    <div class="answers">
+      <div class="answer">
+        <div class="qid">refund_requested · noul</div>
+        <div class="dist">
+          <div class="row"><span class="lbl">yes</span><span class="bar"><i style="width:96%"></i></span><span class="val">0.96</span></div>
+          <div class="row"><span class="lbl">no</span><span class="bar"><i style="width:4%"></i></span><span class="val">0.04</span></div>
+        </div>
+      </div>
+      <div class="answer">
+        <div class="qid">request_type · choice</div>
+        <div class="dist">
+          <div class="row"><span class="lbl">refund</span><span class="bar"><i style="width:88%"></i></span><span class="val">0.88</span></div>
+          <div class="row"><span class="lbl">rebooking</span><span class="bar"><i style="width:8%"></i></span><span class="val">0.08</span></div>
+          <div class="row"><span class="lbl">information</span><span class="bar"><i style="width:4%"></i></span><span class="val">0.04</span></div>
+        </div>
+      </div>
+      <div class="answer">
+        <div class="qid">frustration · score (0–2)</div>
+        <div class="dist">
+          <div class="row"><span class="lbl">calm</span><span class="bar"><i style="width:2%"></i></span><span class="val">0.02</span></div>
+          <div class="row"><span class="lbl">annoyed</span><span class="bar"><i style="width:21%"></i></span><span class="val">0.21</span></div>
+          <div class="row"><span class="lbl">angry</span><span class="bar"><i style="width:77%"></i></span><span class="val">0.77</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-note">Illustrative answer shape (values rounded). Every valid question in a request gets an answer — there is no generation step that can fail or drift off-format.</div>
+  </div>
+</header>
+
+<section>
+  <p class="eyebrow">Why it matters</p>
+  <h2>Software runs on decisions, not prose</h2>
+  <div class="prose"><p>The name is the thesis. Jev is named for the <a href="https://en.wikipedia.org/wiki/Jevons_paradox">Jevons paradox</a> — the economist W.&thinsp;S. Jevons's 1865 observation that when steam engines got more efficient, Britain burned <em>more</em> coal, not less: make a resource cheap enough and you don't save it, you find a thousand new uses for it. Machine judgment is that resource now. Cut a decision's cost from an LLM call — seconds, cents, a prompt to parse — to one forward pass at ~10&nbsp;ms, and you don't automate the same decisions cheaper; you discover the millions of micro-decisions that were never worth automating at all.</p>
+  <p>Because most of what automation actually does is decide: route this ticket, flag this transaction, escalate this case, block this content, approve this claim. The output that matters is a <em>branch condition</em>, not text for a human to read. Speed is the visible benefit of a System One model — but four other properties are what make it fit for decision-taking systems where an LLM is the wrong tool:</p></div>
+
+  <div class="prims">
+    <div class="prim"><div class="name">uncertainty you can budget on</div><div class="q">Thresholds set by cost of error</div><div class="ret">A calibrated probability lets the business choose its error tolerance and get the corresponding automation rate — automate above a threshold, confirm in the middle, escalate below. An LLM saying "I'm fairly confident" is a phrase; 0.94 with known calibration is a budget line. That's the risk–coverage curve below.</div></div>
+    <div class="prim"><div class="name">auditable by construction</div><div class="q">Every decision is a logged, typed record</div><div class="ret">Same question, same state, same distribution — decisions can be replayed, regression-tested, monitored for drift, and explained to a regulator. Fraud, claims, moderation, and compliance workflows need this before they need eloquence.</div></div>
+    <div class="prim"><div class="name">cheap enough to embed everywhere</div><div class="q">Judgment inside the loop, not around it</div><div class="ret">At ~10 ms and fractions of a cent, a judgment can sit inside every guardrail check, every agent tool-route, every queue item — millions of micro-decisions a day where an LLM's latency and cost per call make it structurally impossible.</div></div>
+    <div class="prim"><div class="name">logic stays in code</div><div class="q">Atomic questions, composed by software</div><div class="ret">The model answers narrow, well-scoped questions; the workflow — weights, priorities, side effects, who gets escalated — stays in reviewable code and changes without retraining. Delegate the judgment, never the policy.</div></div>
+  </div>
+
+  <div class="prose" style="margin-top:18px"><p>Where this shape of model earns its keep: ticket triage and intent routing, fraud and claims operations, content moderation queues, compliance screening, escalation gates, and — increasingly — as the fast decision layer <em>inside</em> agentic systems, where a large model plans and a System One model adjudicates every small step.</p></div>
+
+  <h3>…and why an open, self-hosted one matters to an enterprise</h3>
+  <div class="prims">
+    <div class="prim"><div class="name">the data never leaves</div><div class="q">Decisions run on your most sensitive records</div><div class="ret">Tickets, claims, transactions, HR cases — the states being judged are exactly the data that residency rules, client contracts, and internal policy keep inside the perimeter. A self-hosted decision layer removes the third-party API from the path entirely.</div></div>
+    <div class="prim"><div class="name">the function can't change under you</div><div class="q">Frozen weights, not a moving alias</div><div class="ret">Hosted model aliases get upgraded and deprecated; thresholds calibrated last quarter silently mean something else. Owned weights with pinned temperatures make the decision function immutable until <em>you</em> change it — with an audit trail (this project binds calibration artifacts to weight hashes for exactly that reason).</div></div>
+    <div class="prim"><div class="name">auditable to the bottom</div><div class="q">From decision back to training row</div><div class="ret">Risk and compliance can inspect the whole stack: training data provenance, corpus hashes, the decision log of every recipe change, reproducible evaluations with confidence intervals. An API is a black box with an SLA; this is a system of record.</div></div>
+    <div class="prim"><div class="name">customizable by fine-tuning</div><div class="q">Teach it your rubrics, your policies, your edge cases</div><div class="ret">A hosted decision API answers with someone else's judgment. An open model learns yours: recast historical decisions into training questions, generate synthetic scenarios for the edge cases your queues actually see, distill from any teacher you trust, and refit calibration on your own outcomes. The entire loop in this project — data build, LoRA fine-tune, temperature fit, frozen evaluation — runs in about an hour per iteration at 0.6B scale, on one machine.</div></div>
+    <div class="prim"><div class="name">owned economics</div><div class="q">Pay hardware, not tokens</div><div class="ret">At millions of decisions a day, owned capacity at ~10 ms per decision beats per-token metering, rate limits, and someone else's outage window. The unit cost of a decision approaches electricity.</div></div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">The result</p>
+  <h2>What the finished models do</h2>
+  <div class="prose"><p>Two tiers came out of this project, each judged on a reserved test it had never influenced. First, the <strong>volume tier</strong>: after freezing the recipe, the original reserved partition — 1,048 questions never touched by any training, tuning, or selection decision — was spent exactly once on the 0.6B model:</p></div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">77.6%</div><div class="k">accuracy · untouched test</div></div>
+    <div class="stat"><div class="v">0.049</div><div class="k">calibration error (ECE)</div></div>
+    <div class="stat"><div class="v">1,048</div><div class="k">questions, one look, spent</div></div>
+    <div class="stat"><div class="v">~10 ms</div><div class="k">per decision · volume tier, local Mac</div></div>
+  </div>
+
+  <div class="duo">
+    <div class="panel">
+      <h3>Accuracy by primitive</h3>
+      <p class="sub">final test, temperature-scaled</p>
+      <div class="hbars">
+        <div class="hbar"><span class="name">noul</span><span class="track"><span class="fill" style="width:84.7%"></span></span><span class="num">84.7% · n=424</span></div>
+        <div class="hbar"><span class="name">choice</span><span class="track"><span class="fill" style="width:80.6%"></span></span><span class="num">80.6% · n=464</span></div>
+        <div class="hbar"><span class="name">score</span><span class="track"><span class="fill attn" style="width:50%"></span></span><span class="num">50.0% · n=160</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Calibration error by primitive</h3>
+      <p class="sub">lower is better · scale 0–0.15</p>
+      <div class="hbars">
+        <div class="hbar"><span class="name">noul</span><span class="track"><span class="fill" style="width:30%"></span></span><span class="num">0.045</span></div>
+        <div class="hbar"><span class="name">choice</span><span class="track"><span class="fill" style="width:34%"></span></span><span class="num">0.051</span></div>
+        <div class="hbar"><span class="name">score</span><span class="track"><span class="fill attn" style="width:86.7%"></span></span><span class="num">0.130</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>What calibration buys: automate the confident share, escalate the rest</h3>
+    <p class="sub">each point is a confidence threshold; hover for detail — the marked point is the natural operating range</p>
+    <div class="chartwrap">
+    <svg viewBox="0 0 640 350" width="100%" style="max-width:640px" role="img" aria-label="Risk versus coverage curve: automating more decisions increases the error rate among automated ones">
+      <!-- gridlines: risk 0..20% -->
+      <g stroke="var(--line)" stroke-width="1">
+        <line x1="70" y1="300" x2="610" y2="300"/><line x1="70" y1="230" x2="610" y2="230"/>
+        <line x1="70" y1="160" x2="610" y2="160"/><line x1="70" y1="90" x2="610" y2="90"/>
+        <line x1="70" y1="20" x2="610" y2="20"/>
+      </g>
+      <g text-anchor="end">
+        <text x="62" y="304">0%</text><text x="62" y="234">5%</text><text x="62" y="164">10%</text>
+        <text x="62" y="94">15%</text><text x="62" y="24">20%</text>
+      </g>
+      <g text-anchor="middle">
+        <text x="70" y="320">0%</text><text x="205" y="320">25%</text><text x="340" y="320">50%</text>
+        <text x="475" y="320">75%</text><text x="610" y="320">100%</text>
+      </g>
+      <text x="340" y="344" text-anchor="middle">coverage — share of decisions automated</text>
+      <text x="16" y="160" text-anchor="middle" transform="rotate(-90 16 160)">error rate among automated</text>
+
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2"
+        points="136.4,288.8 287.6,260.8 347.0,232.8 419.9,182.4 466.4,129.2 510.1,83.0 564.1,28.4"/>
+
+      <g fill="var(--accent)">
+        <circle class="pt" cx="136.4" cy="288.8" r="4.5" data-t="t ≥ 0.99 · automate 12% · 0.8% errors"/>
+        <circle class="pt" cx="287.6" cy="260.8" r="4.5" data-t="t ≥ 0.95 · automate 40% · 2.8% errors"/>
+        <circle class="pt" cx="347.0" cy="232.8" r="6.5" data-t="t ≥ 0.90 · automate 51% · 4.8% errors"/>
+        <circle class="pt" cx="419.9" cy="182.4" r="4.5" data-t="t ≥ 0.80 · automate 65% · 8.4% errors"/>
+        <circle class="pt" cx="466.4" cy="129.2" r="4.5" data-t="t ≥ 0.70 · automate 73% · 12.2% errors"/>
+        <circle class="pt" cx="510.1" cy="83.0" r="4.5" data-t="t ≥ 0.60 · automate 82% · 15.5% errors"/>
+        <circle class="pt" cx="564.1" cy="28.4" r="4.5" data-t="t ≥ 0.50 · automate 92% · 19.4% errors"/>
+      </g>
+      <!-- larger invisible hover targets -->
+      <g fill="transparent">
+        <circle class="pt" cx="136.4" cy="288.8" r="14" data-t="t ≥ 0.99 · automate 12% · 0.8% errors"/>
+        <circle class="pt" cx="287.6" cy="260.8" r="14" data-t="t ≥ 0.95 · automate 40% · 2.8% errors"/>
+        <circle class="pt" cx="347.0" cy="232.8" r="14" data-t="t ≥ 0.90 · automate 51% · 4.8% errors"/>
+        <circle class="pt" cx="419.9" cy="182.4" r="14" data-t="t ≥ 0.80 · automate 65% · 8.4% errors"/>
+        <circle class="pt" cx="466.4" cy="129.2" r="14" data-t="t ≥ 0.70 · automate 73% · 12.2% errors"/>
+        <circle class="pt" cx="510.1" cy="83.0" r="14" data-t="t ≥ 0.60 · automate 82% · 15.5% errors"/>
+        <circle class="pt" cx="564.1" cy="28.4" r="14" data-t="t ≥ 0.50 · automate 92% · 19.4% errors"/>
+      </g>
+      <g class="lbl-strong">
+        <text x="356" y="224" text-anchor="start" class="lbl-strong">t=0.90 → 51% automated, 4.8% errors</text>
+        <text x="296" y="252" text-anchor="start">t=0.95 → 40% at 2.8%</text>
+        <text x="146" y="281" text-anchor="start">t=0.99 → 12% at 0.8%</text>
+      </g>
+    </svg>
+    </div>
+    <p class="caveat">Measured on the spent test's predictions. Thresholds are in-distribution numbers; they do not transfer to shifted workloads (a measured finding — see the ledger). Confidence is top-1 probability, not a probability of correctness.</p>
+  </div>
+
+  <div class="prose" style="margin-top:18px"><p>Context: the development-set numbers are 82.0% / ECE 0.020, so the untouched test costs ~4 points and doubles the calibration error — a realistic in-family transfer gap. Earlier 3B experiments reached <strong>91% argmax agreement with the real Jev</strong> on held-out sentiment, within 2–3 accuracy points of Jev itself. Served locally, a 12-question request answers in ~121 ms end-to-end.</p></div>
+
+  <div class="panel">
+    <h3>The scale-up: same frozen recipe, 4× the parameters</h3>
+    <p class="sub">MiniCPM5-2B-Base — development numbers, deliberately not comparable to the spent-test headline above</p>
+    <div class="stats" style="margin-top:6px">
+      <div class="stat"><div class="v">86.8%</div><div class="k">dev accuracy (+4.8, CI [+2.7,+7.0])</div></div>
+      <div class="stat"><div class="v">0.018</div><div class="k">dev ECE — no calibration tax</div></div>
+      <div class="stat"><div class="v">0.673</div><div class="k">score accuracy (was 0.562)</div></div>
+      <div class="stat"><div class="v">2.2%</div><div class="k">confident errors @≥0.9 (was 4.8%)</div></div>
+    </div>
+    <p class="caveat">The one number that resisted every 0.6B intervention — score — moved decisively (MAE 0.564 → 0.435). Serving is measured too: a light 3-question request answers in 358 ms at BF16, 195 ms quantized. The dev win was later confirmed on a fresh reserved test the model had never influenced: +6.8 accuracy points over the 0.6B, CI [+4.5, +9.2] — see the timeline for the full story of that test, including the calibration criterion it narrowly missed.</p>
+  </div>
+
+  <div class="panel">
+    <h3>Quantized for serving: q8 keeps everything, at half the size</h3>
+    <p class="sub">the fused 2.5B winner converted with MLX — full dev battery, drift gates at three precisions, 16-case HTTP serving sweep</p>
+    <div class="stats" style="margin-top:6px">
+      <div class="stat"><div class="v">2.5 GB</div><div class="k">weights (BF16: 4.7 GB)</div></div>
+      <div class="stat"><div class="v">1.61×</div><div class="k">median serving speedup</div></div>
+      <div class="stat"><div class="v">0.018</div><div class="k">dev ECE — unchanged</div></div>
+      <div class="stat"><div class="v">0</div><div class="k">flipped answers, drift gate</div></div>
+    </div>
+    <p class="caveat">Dev accuracy 86.6% vs 86.8% BF16, confident-error rates unchanged. 4-bit was measured too: 1.3 GB, but −1.4 accuracy points and no speed advantage over 8-bit on this hardware — it earns no tier of its own. The adoption gate is now closed (decisions 27–28): temperatures were fitted fresh under the q8 weight identity (choice 0.96, noul 1.07, score 1.39 — the score correction was real), the calibrated battery held with confident errors improving to 1.2% at t≥0.95, and the official TypeScript SDK smoke test passed against the q8 server, which reports the temperature hash in its identity endpoint. <strong>q8 is the quality-tier serving configuration</strong> (decisions 28 and 30). SemIf independently flags the same class of issue on its quantized 27B bridge; our drift gate and identity-bound calibration measure it instead of footnoting it.</p>
+  </div>
+
+  <div class="panel">
+    <h3>The adopted lineup</h3>
+    <p class="sub">decision 30 — each tier judged once on a reserved test it never influenced</p>
+    <div class="tablewrap" style="margin-top:6px"><table>
+      <thead><tr><th>Tier</th><th>Model</th><th>Weights</th><th>Unbiased result</th><th>Light request p50</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Quality</strong></td><td>MiniCPM5-2B, fine-tuned, fused, 8-bit</td><td>2.5 GB</td><td>+6.8 pts over volume tier on the fresh out-of-family test, CI [+4.5, +9.2]</td><td>195 ms</td></tr>
+        <tr><td><strong>Volume</strong></td><td>Qwen3-0.6B + LoRA, frozen recipe</td><td>1.4 GB + 33 MB</td><td>77.6% / ECE 0.049 on the in-family reserved test</td><td>77 ms</td></tr>
+      </tbody>
+    </table></div>
+    <p class="caveat">Recorded honestly: the quality tier's confirmation gate asked for calibration error ≤ 0.08 on the fresh test and measured 0.0803 — a miss by 0.0003, inside the estimator's own noise, applied as written. The adoption therefore rests on an explicit judgment entry citing that near-miss, not on the pre-registered gate. The two tests use different data (in-family vs out-of-family), so the tiers' absolute numbers are not comparable to each other. Confidence thresholds for both tiers are valid in-family only until shift-robust calibration lands — the measured reason is in the ledger.</p>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">The key idea</p>
+  <h2>How this differs from calling an LLM</h2>
+  <div class="prose"><p>An LLM and a System One model can be the <em>same network</em> — what changes is what you take from it. An LLM generates text token by token and you parse what comes out. Here, nothing is ever generated: one forward pass, then read the probability the model assigns to each allowed answer, directly from its output layer.</p></div>
+
+  <div class="compare">
+    <div class="lane llm">
+      <span class="tag">LLM call</span>
+      <ul class="steps">
+        <li>Prompt with instructions + format demands<span class="sub">"Respond ONLY with valid JSON…"</span></li>
+        <li>Autoregressive generation, token by token<span class="sub">latency scales with output length</span></li>
+        <li>Parse the text back into data<span class="sub">can fail: wrong format, invented labels, refusals</span></li>
+        <li>Ask for a confidence, get more text<span class="sub">"I'm 90% sure" is a phrase, not a measurement</span></li>
+      </ul>
+    </div>
+    <div class="lane s1">
+      <span class="tag">System One call</span>
+      <ul class="steps">
+        <li>State + typed questions with the allowed answers<span class="sub">choice options, score levels, or yes/no</span></li>
+        <li>One forward pass, zero tokens generated<span class="sub">read logits at the answer position</span></li>
+        <li>Softmax restricted to the allowed answers<span class="sub">every output is answer-shaped by construction</span></li>
+        <li>The distribution <em>is</em> the confidence<span class="sub">trained toward calibration: 0.8 should be right ~80% of the time</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="prims">
+    <div class="prim"><div class="name">choice</div><div class="q">Which of these options?</div><div class="ret">Up to 255 named options → distribution + top choice + confidence. Routing, classification, intent.</div></div>
+    <div class="prim"><div class="name">score</div><div class="q">Which level on a described scale?</div><div class="ret">2–10 ordered levels → distribution + probability-weighted score (fractional, e.g. 1.3). Severity, satisfaction.</div></div>
+    <div class="prim"><div class="name">noul</div><div class="q">Is this statement true?</div><div class="ret">One number: P(yes) ∈ [0, 1]. A 0.5 means genuine uncertainty, not "medium".</div></div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">The frozen recipe</p>
+  <h2>What's actually inside</h2>
+  <dl class="facts">
+    <div class="fact"><dt>Backbones</dt><dd>One frozen recipe, two tiers: Qwen3-0.6B base + LoRA (volume) and MiniCPM5-2B base + LoRA, fused and quantized to 8-bit (quality) — attention-projection LoRA on Apple MLX. Wire-compatible server: the official Typesafe TypeScript SDK runs against both unchanged (smoke-tested, not certified).</dd></div>
+    <div class="fact"><dt>Readout</dt><dd>Versioned prompt templates; the answer is a softmax over the allowed answer tokens at the final position. Multi-question requests can share one pass over the state (opt-in, FP32-gated).</dd></div>
+    <div class="fact"><dt>Loss</dt><dd>Cross-entropy against a target <em>distribution</em> — a proper scoring rule — plus a Ranked-Probability-Score term on ordinal questions, adopted from Laya's published RLCD recipe after it measurably fixed score error on two backbones.</dd></div>
+    <div class="fact"><dt>Data</dt><dd>8.7k questions recast from public datasets + 1.8k synthetic scenarios (cheap generator writes diverse states and rubrics; a <strong>pinned Jev version</strong> supplies the probability targets), filtered for teacher overconfidence, hash-verified, split by content groups so near-duplicates can't leak.</dd></div>
+    <div class="fact"><dt>Calibration</dt><dd>Per-primitive temperatures fitted only on a dedicated calibration split, pinned to the exact weight hashes and fail-closed on any provenance mismatch. Both tiers fit near 1 (0.6B: 1.02–1.16; q8: 0.96–1.39) — calibration is trained in, and the fit is a trim, not a rescue.</dd></div>
+  </dl>
+</section>
+
+<section>
+  <p class="eyebrow">The story</p>
+  <h2>Five days, measured</h2>
+  <div class="prose"><p>Every step below is a frozen-protocol experiment with grouped-bootstrap confidence intervals; amber dots are the setbacks, kept on the record because they changed the plan.</p></div>
+
+  <ul class="timeline">
+    <li class="tl"><div class="when">Day 1 · the engine</div><div class="what">Zero-generation readout works out of the box</div><div class="how">A stock model + restricted softmax answers every question by construction — no parsing, nothing to fail. The eval harness (ECE, Brier, NLL) goes in before any training.</div><div class="chips"><span class="chip">1 forward pass</span><span class="chip">0 output tokens</span></div></li>
+    <li class="tl setback"><div class="when">Day 1 · first bias</div><div class="what">Bare yes/no prompts answer "yes" 94% of the time</div><div class="how">The untrained readout inherited acquiescence bias; calibration alone pushed accuracy below chance, exposing absent signal. Lettered options fixed it.</div><div class="chips"><span class="chip down">0.535 acc</span><span class="chip">→ 0.695 · ECE 0.088</span></div></li>
+    <li class="tl"><div class="when">Day 2 · calibration transfers</div><div class="what">Fine-tuning teaches honesty, not just answers</div><div class="how">On tasks excluded from training, LoRA training cut calibration error while accuracy held — and 2,000 of Jev's own soft distributions matched what 8,000 hard labels taught, at a quarter of the data.</div><div class="chips"><span class="chip">held-out sst2 0.925</span><span class="chip">91% agreement with Jev</span></div></li>
+    <li class="tl setback"><div class="when">Day 2 · protocol earns its keep</div><div class="what">A learning rate silently ruins a model</div><div class="how">Qwen3-0.6B at lr 5e-5 regressed below its own untuned baseline; the predeclared 1e-5 control recovered it to 81.3%. Casual experimentation would have blamed the backbone.</div><div class="chips"><span class="chip down">39.6% at 5e-5</span><span class="chip">81.3% at 1e-5</span></div></li>
+    <li class="tl"><div class="when">Day 3 · the ordinal loss</div><div class="what">One idea from the clone ecosystem survives testing</div><div class="how">Of every reviewed competitor, one piece was worth taking: the Ranked Probability Score from Laya's published training recipe — differentiable, so no RL needed. It fixed the measured score weakness and replicated on a second backbone family.</div><div class="chips"><span class="chip">score MAE −0.034, CI excludes 0</span><span class="chip">SmolLM2: +3.0 acc</span></div></li>
+    <li class="tl"><div class="when">Day 3 · synthetic data, measured three ways</div><div class="what">The null that flipped</div><div class="how">2,003 generated scenarios (22 domains, long documents, structured states, planned ambiguity) scored by pinned jev-1.13.0 looked like a null on in-family evals — then a fresh held-out synthetic eval showed exactly the targeted gains, with distribution fidelity improving too (JS 0.187→0.117), not just argmax agreement.</div><div class="chips"><span class="chip">+17.6 pts on target dims, CI [+11.3, +23.8]</span></div></li>
+    <li class="tl setback"><div class="when">Day 4 · the audit wave</div><div class="what">An external review finds what we missed</div><div class="how">Three confirmed hits: the overconfidence filter was deleting correct uncertainty (fixed with exemptions), 54% of synthetic score rubrics were categorical masquerading as scales (generator hardened; retroactive exclusion tested and rejected as unnecessary), and the 42-case rubric benchmark turned out to swing ±6 cases on seed alone — <strong>every accuracy claim made on it was retracted</strong>.</div><div class="chips"><span class="chip down">rubric acc 0.69–0.83 across seeds</span><span class="chip">203 rows filtered</span></div></li>
+    <li class="tl"><div class="when">Day 4 · freeze</div><div class="what">Three candidates, one selection, recipe frozen</div><div class="how">The filtered corpus won on everything a calibration-first project values; seed and backbone replication both closed. Configuration changes now require a new decision entry.</div><div class="chips"><span class="chip">dev 82.0% · ECE 0.020</span><span class="chip">temperatures 1.02–1.16</span></div></li>
+    <li class="tl"><div class="when">Day 4 · the number</div><div class="what">The reserved test, spent once</div><div class="how">1,048 questions no decision ever touched. The result stands unqualified — and can never be reused.</div><div class="chips"><span class="chip">77.6% · ECE 0.049 · NLL 0.516</span></div></li>
+    <li class="tl"><div class="when">Day 4 · scale-up</div><div class="what">MiniCPM5-2B wins the backbone bet</div><div class="how">Same frozen recipe, 4× the parameters: significant gains across the battery, no calibration tax, confident errors halved — and the score primitive finally moved. Development numbers; a fresh reserved test is still owed.</div><div class="chips"><span class="chip">dev 86.8% · ECE 0.018</span><span class="chip">score 0.562 → 0.673</span></div></li>
+    <li class="tl"><div class="when">Day 5 · the patch verdict</div><div class="what">The ecosystem's best trick finds nothing left to fix</div><div class="how">kev's targeted second pass — the move that halved their 8.7% confident errors — ran under our protocol on the scale-up winner: 713 guarded rows (ordinality-verified, overconfidence-filtered, leakage-checked), low-LR warm-started patch. Every pre/post interval includes zero. At 2.2% confident errors there was nothing to halve. A clean null, kept on the record; the unpatched adapter stays.</div><div class="chips"><span class="chip">dev +0.4pt, CI [−0.6, +1.6]</span><span class="chip">no regression either</span></div></li>
+    <li class="tl"><div class="when">Day 5 · shrink the winner</div><div class="what">Quantized to 8-bit: same honesty, half the bytes, 1.6× faster</div><div class="how">The 2.5B winner fused and converted with MLX. q8 matches BF16 on every quality metric (ECE 0.018 unchanged), zero flipped answers in the drift gate, and serves at a median 1.61× speedup. The surprise: 4-bit buys only disk — it's <em>slower</em> than 8-bit on this machine and costs 1.4 accuracy points. The adoption gate — a fresh temperature fit bound to the q8 weight hashes, a held battery, and an SDK smoke test — closed the same day: q8 is now the recommended serving format.</div><div class="chips"><span class="chip">q8 · 2.5 GB · dev 86.6%</span><span class="chip">median 1.61× faster</span><span class="chip">adopted · decision 28</span></div></li>
+    <li class="tl setback"><div class="when">Day 5 · the fresh test</div><div class="what">A new reserved test, pre-registered, spent — and the gate says no</div><div class="how">1,048 gold questions from four sources no decision ever touched (topic routing, grammaticality, spam, app-review ratings), frozen and committed before either model saw them. q8 beat the 0.6B by +6.8 points with the CI excluding zero — exactly the pre-registered 3–8 point call — but its calibration error landed at 0.0803 against a pre-declared ≤ 0.08, so the confirmation did not trigger. By 0.0003. Applied as written: a protocol that bends when the number is close is no protocol. The bigger finding: out-of-family, confident errors hit 14–19% for <em>both</em> models versus ~2% in-family.</div><div class="chips"><span class="chip">q8 +6.8 pts, CI [+4.5, +9.2]</span><span class="chip down">ECE 0.0803 vs ≤ 0.08 · not confirmed</span></div></li>
+    <li class="tl"><div class="when">Day 5 · the tier call</div><div class="what">Adopted by judgment, with the near-miss on the record</div><div class="how">The lineup is set: MiniCPM-q8 as the quality tier, the frozen 0.6B for volume. Decision 30 states its basis openly — every proper metric significantly better on the spent fresh test, a 0.0003 miss inside estimator noise, and a failed criterion whose substance (calibration under shift) fails both tiers equally, so it couldn't pick between them. It claims judgment, not the gate's confirmation. The consequence is also on the record: shift-robust calibration is now the top build item, and confidence thresholds are in-family only until it lands.</div><div class="chips"><span class="chip">quality: 2.5B q8</span><span class="chip">volume: 0.6B</span><span class="chip">decision 30</span></div></li>
+    <li class="tl"><div class="when">Day 5 · the first fix</div><div class="what">100 labels from a workload's own traffic repair its calibration</div><div class="how">Pre-registered, analysis-only, on the spent test's predictions: fit a temperature per workload on a small labeled sample, judge it on the held-out rest. The declared criterion missed (2 of 4 workloads, not 3) — and the split <em>is</em> the finding. Where miscalibration is a scalar, the fix is decisive in both directions: one workload was overconfident, another <em>under</em>confident — its safe coverage jumped from 36% to 90% at 1% errors. Where it isn't scalar, a temperature does nothing; those workloads need abstention. Aggregate confident errors at t≥0.9: 16–19% → 3–4%.</div><div class="chips"><span class="chip">errors@0.9: 16–19% → 3–4%</span><span class="chip down">2 of 4 workloads · criterion missed</span></div></li>
+    <li class="tl"><div class="when">Day 5 · the fix ships</div><div class="what">Per-workload calibration becomes a serving feature</div><div class="how">One HTTP call: <code>POST /v1/calibrations</code> with ~100 labeled decisions from a deployment's own traffic. The server scores them through the exact serving path, fits the temperatures, and hands back an identity-bound artifact — with a verdict per primitive that says whether a temperature is even the right tool, because the experiment showed that half the time it isn't. Unknown workloads fail closed; fits reload at startup under the same fail-closed provenance as everything else. The served fit matches the offline experiment pipeline to four decimals.</div><div class="chips"><span class="chip">POST /v1/calibrations</span><span class="chip">verdict per fit</span><span class="chip">decision 32</span></div></li>
+  </ul>
+</section>
+
+<section>
+  <p class="eyebrow">The honesty ledger</p>
+  <h2>What broke, and where it stands</h2>
+  <div class="ledger">
+    <div class="lcard"><div class="head"><span class="t">Score is the weak primitive</span><span class="badge open">OPEN</span></div><div class="d">50% accuracy on the 0.6B final test. Scale moved it — 0.673 accuracy / 0.435 MAE at 2.5B (dev) — but the targeted patch pass came back a clean null: at 2.2% confident errors there was nothing left for kev's technique to fix. Still the weakest primitive everywhere — 53.8% on the fresh out-of-family test (vs 48.1% for the 0.6B); further movement likely needs better data, not more passes.</div></div>
+    <div class="lcard"><div class="head"><span class="t">Calibration doesn't survive distribution shift</span><span class="badge open">PARTIAL FIX</span></div><div class="d">Quantified on fresh gold data: out-of-family confident errors hit 14–19% at t≥0.9 versus ~2% in-family. First fix measured: fitting a temperature on just 100 labeled decisions from a workload's own traffic cut aggregate confident errors to 3–4% — and on one workload the model was <em>under</em>confident, so the fit nearly tripled safe coverage instead of shrinking it. Where miscalibration isn't a scalar (two of four workloads), a temperature is a no-op; those need abstention. Still open, now with a measured path.</div></div>
+    <div class="lcard"><div class="head"><span class="t">The rubric benchmark was seed noise</span><span class="badge retired">RETIRED</span></div><div class="d">42 hand-written cases swing ±6 correct answers on initialization alone. All accuracy claims made on it were withdrawn; it survives as a regression canary only.</div></div>
+    <div class="lcard"><div class="head"><span class="t">Half the synthetic score rubrics weren't scales</span><span class="badge fixed">FIXED FWD</span></div><div class="d">A judge audit found 54% presented categories as "levels". The generator now requires a declared monotonic dimension — verified on the fresh patch batch, where ordinal rubrics rose from 46% to 80%. Retroactive exclusion was tested and measurably unnecessary.</div></div>
+    <div class="lcard"><div class="head"><span class="t">The teacher is overconfident on missing evidence</span><span class="badge fixed">FILTERED</span></div><div class="d">A third of missing-evidence scenarios got near-certain answers from Jev itself. Those rows are filtered from training — except where the confident answer was an explicit "cannot determine", which is correct behavior.</div></div>
+    <div class="lcard"><div class="head"><span class="t">Fast batching drifts at low precision</span><span class="badge fixed">GATED</span></div><div class="d">Shared-state execution showed batch-shape-dependent BF16 drift (one flipped answer). It's opt-in and FP32-only; measured drift at the API is now &lt; 7×10⁻⁶.</div></div>
+    <div class="lcard"><div class="head"><span class="t">255-option readout passes tests, fails reality</span><span class="badge open">OPEN</span></div><div class="d">The experimental per-candidate readout scored 0/30 on a real 77-way task with near-uniform predictions — capacity is not competence. Needs a matched-compute rerun before scaling.</div></div>
+    <div class="lcard"><div class="head"><span class="t">Agreement with a teacher ≠ correctness</span><span class="badge open">OPEN</span></div><div class="d">Synthetic evals measure fidelity to jev-1.13.0's judgments. An independently adjudicated workflow benchmark with error costs remains the gate for any "safe automation" claim.</div></div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">The ecosystem</p>
+  <h2>Where this sits among the Jev clones</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Project</th><th>Backbone</th><th>Trained?</th><th>Calibration measured?</th><th>Distinguishing trait</th></tr></thead>
+    <tbody>
+      <tr><td>jeff</td><td>400M encoder</td><td>no (zero-shot)</td><td>global temperature</td><td>API server packaging</td></tr>
+      <tr><td>kev</td><td>0.8B–9B family + pointer head</td><td>yes, incl. targeted second passes</td><td>yes, temp-scaled</td><td>9B trails Jev by 3.5 pts on their suite</td></tr>
+      <tr><td>Nimble</td><td>9B logit readout</td><td>yes, contrastive data</td><td>no</td><td>minimal-pair curation</td></tr>
+      <tr><td>Laya</td><td>421M bidirectional encoder</td><td>yes, RLCD (published)</td><td>partially</td><td>13ms latency; 512-token ceiling</td></tr>
+      <tr><td>openjev</td><td>DiffusionGemma 26B-A4B</td><td>no (strong base, zero-shot)</td><td>unknown</td><td>diffusion readout; free hosted tier; images</td></tr>
+      <tr><td>SemIf</td><td>Qwen3.5-4B frozen (also 0.6B, MiniCPM)</td><td>no (frozen checkpoints)</td><td>post-hoc, per workload</td><td>4 runtimes incl. browser WebGPU; per-row provenance</td></tr>
+      <tr><td><strong>danny</strong> (this project)</td><td>0.6B + 2.5B logit readout</td><td>yes, frozen protocol</td><td><strong>primary metric, with CIs</strong></td><td>teacher distillation + audited retractions</td></tr>
+    </tbody>
+  </table></div>
+  <p class="caveat">Jev itself (~83% MMLU-Pro per black-box probes, 64k context) implies a far larger backbone — the competition here is on calibration, cost, and self-hosting, not frontier reasoning. SemIf is the closest cousin — same readout, same reproducibility instincts, even the same backbones — with one decisive difference: it never trains. Its frozen 4B needs temperature 2.5 to drag calibration error from 0.21 to 0.07 post-hoc; our fine-tuned models fit temperatures of 1.02–1.16 because calibration is trained in. That gap is this project's whole thesis.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Roadmap</p>
+  <h2>What's next</h2>
+  <ul class="next">
+    <li><span class="k">per-workload calibration</span><span><strong>Built.</strong> <code>POST /v1/calibrations</code> fits a workload's temperatures from ~100 labeled decisions through the exact serving path; requests opt in per call, unknown workloads fail closed, and the artifact is identity-bound and reloadable at startup like every calibration in this project. Each fit ships its own verdict — apply, neutral, structural warning, or degenerate — so the endpoint tells you when a temperature is the wrong tool. Verified end-to-end on the q8 tier: the served fit matches the experiment pipeline to four decimals.<span class="why">The measured 16–19% → 3–4% confident-error repair, one HTTP call away from any deployment.</span></span></li>
+    <li><span class="k">abstention</span><span>For the workloads the scalar fix can't touch (two of four in the experiment): an out-of-family signal that widens the escalation band instead of emitting confident probabilities.<span class="why">A temperature can't fix rank errors; refusing to be confident can.</span></span></li>
+    <li><span class="k">holdout v2</span><span>An independently reviewed workflow benchmark with error costs and risk–coverage acceptance criteria.<span class="why">Both reserved tests are spent; teacher agreement isn't correctness; a "safe automation" claim needs adjudicated cases.</span></span></li>
+    <li><span class="k">serving hardening</span><span>The deep-review fixes (view-budget admission, deadline-safe response writes) landed and are benchmark-verified; remaining: constant-cost shared execution and per-question pre-tokenization.<span class="why">From measured dev server to something a team runs.</span></span></li>
+  </ul>
+</section>
+
+<footer>
+  <p><strong>Why "danny":</strong> Jev is named for the Jevons paradox; its product category is the "System One" model, Daniel Kahneman's term from <em>Thinking, Fast and Slow</em> for the fast, automatic judgment faculty. Colleagues called Kahneman Danny — and this project, a System 1 built in the open and calibrated on purpose, borrows the name of the person who described the faculty it tries to be.</p>
+  <p>Working repository: <span class="mono">~/code/danny</span> — docs/ holds the full record: decision log with evidence and retractions, experiment reports with confidence intervals, training and serving guides. Local numbers are development measurements on Apple Silicon, not compatibility certification. Reference points: Typesafe's public docs, the kev / Nimble / Laya open-source projects, and independent black-box probes of Jev.</p>
+</footer>
+
+</div>
+
+<div id="tooltip" hidden></div>
+<script>
+(function () {
+  var tip = document.getElementById("tooltip");
+  document.querySelectorAll(".pt").forEach(function (el) {
+    el.addEventListener("mousemove", function (e) {
+      tip.textContent = el.getAttribute("data-t");
+      tip.hidden = false;
+      tip.style.left = (e.clientX + 14) + "px";
+      tip.style.top = (e.clientY - 10) + "px";
+    });
+    el.addEventListener("mouseleave", function () { tip.hidden = true; });
+  });
+})();
+</script>

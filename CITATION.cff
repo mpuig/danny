@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use danny in your work, please cite it."
+title: "danny: an open-source System One decision model"
+authors:
+  - family-names: Puig
+    given-names: Marc
+repository-code: "https://github.com/mpuig/danny"
+license: MIT
+date-released: 2026-09-22
+abstract: >
+  A learning project that rebuilds the behavior of Typesafe's Jev on small
+  fine-tuned open models: calibrated typed decisions (choice/score/noul) via
+  restricted-logit readout, trained and served locally on Apple MLX, with a
+  frozen experimental protocol, grouped-bootstrap confidence intervals, and an
+  audited decision log. Named for Danny Kahneman.
