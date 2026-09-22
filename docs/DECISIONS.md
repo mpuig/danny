@@ -500,3 +500,35 @@ helped and slightly hurt some slices. This is the strongest evidence yet for the
 open shift-robust-calibration line: thresholds calibrated in-family do not
 transfer, and any deployment story must either calibrate per workload (as SemIf
 does) or abstain out-of-family. Full numbers: EXPERIMENTS §14.
+
+## 30. Serving tier lineup adopted by judgment; the gate near-miss stands recorded
+
+Status: **adopted 2026-09-22 by explicit judgment (user-directed). The
+pre-registered decision-29 gate did NOT confirm this adoption, and this entry
+does not claim it did.**
+
+The lineup:
+
+- **Quality tier**: MiniCPM5-2B fused q8 (`models/minicpm5-2b-sfr-q8`) with
+  `data/runs/quant-v1/temperature-q8.json` (identity sha256 0115533118f2...),
+  as configured by decision 28.
+- **Volume tier**: the frozen 0.6B configuration (decision 25),
+  `Qwen/Qwen3-0.6B` + `adapters/qwen3-0.6b-structured-v1-synthfiltered-rps`
+  with `data/runs/filtered-v2/temperature.json`.
+- The BF16 MiniCPM adapter remains the training and reference artifact.
+
+Basis, stated openly rather than via the gate: on the spent reserved-v2 test the
+quality tier beat the volume tier on every proper metric with CIs excluding zero
+(accuracy +6.8 [+4.5, +9.2]; NLL -0.110; Brier -0.082), matching the
+pre-registered direction. The failed criterion — scaled ECE 0.0803 against
+<= 0.08 — missed by 0.0003, inside the estimator's own sampling noise at
+n=1,048. More importantly, the criterion's substance (calibration under
+distribution shift) fails for BOTH tiers at far larger magnitude (confident
+errors 13.9% and 18.7% at t>=0.9 out-of-family), so it does not discriminate
+between backbones and the lineup choice does not worsen it.
+
+Consequences: (1) shift-robust calibration is promoted to the top build item —
+until it lands, deployment guidance must state that confidence thresholds are
+in-family only; (2) reserved-v2 remains spent — nothing may be tuned against it
+and no further looks exist; (3) any future recipe or backbone change re-enters
+through a new decision entry with a new reserved split.
