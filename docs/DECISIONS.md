@@ -471,3 +471,32 @@ not comparable to the 0.6B's 77.6%); CoLA grammaticality is a capability
 neither training corpus targeted; app_reviews stars and yahoo topics carry
 ordinary crowd-label noise, which bounds the achievable ceiling. Gold labels
 here measure correctness, not agreement with the Jev teacher.
+
+### Decision 29 outcome (2026-09-22): look spent; q8 NOT confirmed by the gate
+
+The single pre-registered look ran; the partition is spent. Applying the
+pre-declared mapping with no post-hoc tolerance:
+
+- **Criterion 1 (paired accuracy, CI excluding zero): PASS.** q8 73.3% vs 0.6B
+  66.5%: delta +6.8 points, CI [+4.5, +9.2]; NLL -0.110 [-0.158, -0.062];
+  Brier -0.082 [-0.103, -0.061]. The pre-registered direction (3-8 points)
+  landed at +6.8.
+- **Criterion 2 (q8 scaled ECE <= 0.08): FAIL by 0.0003.** Measured 0.0803.
+
+The mapping says either failure returns the tier decision to open, so the tier
+decision is open. The near-miss is recorded as exactly that: 0.0003 of ECE on
+n=1,048 is far inside the estimator's own sampling noise, but the threshold was
+declared without a tolerance and is applied as declared — the alternative is a
+protocol that bends when the number is close, which is no protocol. No retuning
+or refitting responds to these numbers; any adoption now requires a new decision
+entry that weighs this evidence openly rather than claiming the pre-registered
+confirmation.
+
+The substantive finding is bigger than the gate: **out-of-family calibration
+degrades severely for both models.** Confident-error rates at t>=0.9 were 13.9%
+(q8) and 18.7% (0.6B) against ~2% in-family, with per-source ECE up to 0.21
+(yahoo_topics) hiding inside the 0.08 overall. In-family temperatures barely
+helped and slightly hurt some slices. This is the strongest evidence yet for the
+open shift-robust-calibration line: thresholds calibrated in-family do not
+transfer, and any deployment story must either calibrate per workload (as SemIf
+does) or abstain out-of-family. Full numbers: EXPERIMENTS §14.

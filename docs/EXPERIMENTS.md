@@ -454,3 +454,42 @@ reports the temperature sha256 (0115533118f2...) in its identity. Reports:
 `data/runs/quant-v1/{q8-calibration,q8-dev-calibrated}/`, artifact
 `data/runs/quant-v1/temperature-q8.json`.
 
+
+## 14. Reserved-v2: the fresh gold test, spent once (2026-09-22)
+
+Decision 29's partition — 1,048 questions from four public gold sources never
+used by any training, evaluation, or selection decision here (yahoo_answers_topics
+choice 464, glue/cola noul 212, sms_spam noul 212, app_reviews score 160; zero
+content-key collisions against every existing partition; test.jsonl sha256
+7ee61896...) — evaluated exactly once under the pre-registered protocol: both
+frozen configs, raw and temperature-scaled, paired grouped bootstrap on the
+scaled runs. **This is an out-of-family transfer test; absolute numbers are not
+comparable to the in-family spent test (§9).**
+
+| Config | Accuracy | ECE | NLL | Brier | Confident errors t>=0.9 |
+|---|---:|---:|---:|---:|---:|
+| MiniCPM q8 + fitted temps | 73.3% | 0.080 | 0.896 | 0.392 | 13.9% |
+| 0.6B frozen + fitted temps | 66.5% | 0.076 | 1.006 | 0.474 | 18.7% |
+
+Paired deltas (q8 minus 0.6B, grouped bootstrap, 2,000 resamples): accuracy
++6.8 [+4.5, +9.2]; NLL -0.110 [-0.158, -0.062]; Brier -0.082 [-0.103, -0.061] —
+all significant, all favoring q8, matching the pre-registered 3-8 point
+expectation. Per source (q8 / 0.6B accuracy): sms_spam 96.7 / 84.0,
+cola 75.5 / 65.1, yahoo_topics 68.3 / 65.5, app_reviews 53.8 / 48.1. Score
+remains the weakest primitive out-of-family too (53.8% / ECE 0.104 scaled).
+
+**Gate verdict (decision 29): not confirmed.** Criterion 1 passed; criterion 2
+(q8 scaled ECE <= 0.08) failed at 0.0803 — by 0.0003, applied as declared, with
+the near-miss recorded as a near-miss. The tier decision is open; the partition
+is spent for selection.
+
+**The finding that matters: in-family calibration does not survive this shift.**
+Both models' confident-error rates at t>=0.9 are 14-19% here versus ~2%
+in-family — an operator automating at 0.9 confidence on these workloads would
+see roughly one error in every seven automated decisions while believing the
+rate is one in fifty. Per-source ECE reaches 0.21 (yahoo_topics) inside the
+0.08 overall. In-family temperatures moved overall ECE only slightly (q8 0.099
+raw -> 0.080; 0.6B 0.088 -> 0.076) and worsened some slices. This quantifies
+the ledger's open shift-robustness item on gold data with confidence intervals:
+per-workload calibration or out-of-family abstention is a deployment
+prerequisite, not an enhancement. Reports: data/runs/reserved-v2/.
