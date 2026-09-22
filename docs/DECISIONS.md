@@ -366,8 +366,8 @@ result, if adopted, becomes a new recipe version by decision entry):
 
 ## 27. Post-training quantization of the MiniCPM serving weights
 
-Status: **measured 2026-09-22; q8 flagged adoption-worthy; adoption blocked on a
-temperature refit; nothing adopted yet.**
+Status: **measured 2026-09-22; prerequisites completed the same day; q8 adopted
+as the recommended serving format by entry 28.**
 
 Question: can quantization improve serving speed without giving up the calibrated
 quality that justified the MiniCPM scale-up? Method: fuse the scale-up LoRA into
@@ -398,3 +398,33 @@ Cross-reference: SemIf independently flags its quantized 27B bridge as experimen
 due to "numerical differences in quantized execution"; our drift gate measures that
 effect (max probability drift 0.0035 q8 / 0.031 q4-native) rather than treating it
 as a qualitative caveat.
+
+## 28. q8 adopted as the recommended MiniCPM serving format
+
+Status: **adopted 2026-09-22, all three decision-27 prerequisites met.**
+
+1. **Temperature fit under the fused-q8 identity**: per-primitive fit on the
+   declared calibration partition (raw q8 predictions, provenance-verified by
+   fit_calibration): choice T=0.961, noul T=1.073, score T=1.387 — none at
+   bounds. Score is the one real correction (fitting-split NLL 1.007 -> 0.970);
+   choice/noul confirm the model is nearly calibrated raw, matching the 0.6B
+   pattern. Artifact: `data/runs/quant-v1/temperature-q8.json`,
+   sha256 0115533118f2ad2eb88e1a019dac1fb5bdc8179516c01b8e41c055331cff712c
+   (not versioned, per the temperature-artifact convention; rebuild =
+   eval_dataset on calibration.jsonl + fit_calibration).
+2. **Calibrated dev battery holds** (n=1,128): accuracy 86.6% (identical to raw
+   — temperature cannot move argmax), NLL 0.3275 vs 0.3266 raw, ECE 0.0192 vs
+   0.0180 raw (both within noise), confident errors at t>=0.95 improved
+   1.46% -> 1.19%. No regression anywhere.
+3. **Official TypeScript SDK smoke test passed** against the q8 server launched
+   with the fitted temperatures; `/v1/models` reports the temperature sha256 in
+   the serving identity, closing the provenance loop.
+
+Serving lineup consequence: MiniCPM q8 + temperature-q8.json is the recommended
+quality-tier serving configuration. The BF16 adapter remains the training and
+reference artifact; the frozen 0.6B configuration (decision 25) remains the
+volume-tier candidate. The tier decision itself still waits on a fresh reserved
+split for MiniCPM (no unbiased test exists for this model). Dev-side score
+calibration moved slightly against the fit (ECE 0.060 -> 0.069, Brier +0.005)
+while the fitting split improved — the familiar in-family transfer wobble at
+n=226; recorded, not concerning at this magnitude.

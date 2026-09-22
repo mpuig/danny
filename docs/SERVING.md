@@ -177,11 +177,24 @@ reusing its port, or choose an unused port.
 are full-weight variants of the MiniCPM reference adapter, launched with `--model
 models/minicpm5-2b-sfr-q8` and **no `--adapter`**. They are git-ignored artifacts;
 rebuild with `mlx_lm fuse` on the reference adapter, then `mlx_lm convert -q
---q-bits 8|4`. q8 measured quality-free with a median 1.61x serving speedup
-(experiments §13, decision 27), but the BF16-fitted temperature files belong to a
-different artifact identity and will fail closed: do not pass them via
-`--temperature`. Until temperatures are refit for the fused-q8 identity, quantized
-serving is uncalibrated-raw only.
+--q-bits 8|4`.
+
+**q8 is the recommended quality-tier serving configuration** (decision 28):
+quality-free versus BF16, median 1.61x faster, with its own fitted temperatures.
+
+```fish
+uv run python scripts/serve.py --model models/minicpm5-2b-sfr-q8 \
+  --temperature data/runs/quant-v1/temperature-q8.json --port 8399
+```
+
+The temperature file is pinned to the fused-q8 weight hashes (sha256
+0115533118f2ad2eb88e1a019dac1fb5bdc8179516c01b8e41c055331cff712c, reported by
+`/v1/models`); it fails closed against any other weights, including BF16 and q4.
+If the file is missing, rebuild it: eval_dataset on
+`data/experiments/synthfiltered-corpus/calibration.jsonl` with the q8 model (raw),
+then `fit_calibration.py` with that predictions dir and the corpus manifest. q4
+has no temperature artifact and earns no tier (slower than q8, lower quality —
+experiments §13).
 
 The letter-readout pilot and four `smollm2-135m-teacher-matched-*` adapters are also
 local experiment controls, not better validated replacements for the selected Qwen.

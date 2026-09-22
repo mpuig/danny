@@ -35,12 +35,13 @@ stable default; shared execution is opt-in. FP32 shared tests reduced drift belo
 serving acceptance still requires broader quality and load tests.
 
 **Current decision point: serving tiers.** The MiniCPM scale-up won selection
-(experiments §11), its patch pass was a clean null (§12), and quantization is
-measured (§13): q8 is quality-free at 2x smaller and a median 1.61x faster; q4
-buys only footprint. The pending choice is the serving tier lineup — e.g., Qwen
-0.6B BF16 for the small tier, MiniCPM q8 for the quality tier — which first
-requires the decision-27 temperature refit for the fused-q8 identity, and then a
-documented latency/quality/footprint policy per tier rather than a single
+(experiments §11), its patch pass was a clean null (§12), quantization is
+measured (§13), and the decision-27 gate is closed: q8 with its own fitted
+temperatures is the recommended quality-tier serving configuration (decision 28).
+What remains for the tier decision proper: a fresh reserved split for MiniCPM
+(no unbiased test exists for the 2B — the old partition was spent on the 0.6B),
+and a documented latency/quality/footprint policy per tier — e.g., Qwen 0.6B BF16
+for the volume tier, MiniCPM q8 for the quality tier — rather than a single
 recommended adapter.
 
 ## Destination

@@ -436,10 +436,21 @@ the send fails that way. The q4 probe result was revalidated post-fix
 (`serving-q4-probes`, validation_pass true); the q8 sweep ran entirely under the
 fixed client. Server behavior was correct throughout.
 
-**Adoption status: flagged, not adopted (decision 27).** Both dev batteries reused
-the BF16-fitted per-primitive temperatures. Quantization changes the artifact
-identity, so the provenance-bound calibration fails closed at serving time by
-design. Adopting q8 for serving requires refitting temperatures on the calibration
-split under the fused-q8 identity and repeating the SDK smoke test before any
-calibrated claim.
+**Adoption status: gate passed same day; q8 adopted (decisions 27–28).** A
+correction to the paragraph above as first drafted: the MiniCPM dev batteries
+(BF16 and quantized) had run *raw* — no temperature artifact existed for the 2B
+tier at all. The decision-27 chain therefore fitted the first one: raw q8
+predictions on the declared calibration partition (n=1,103, provenance-verified),
+then per-primitive fits — choice T=0.961, noul T=1.073, score T=1.387, none at
+bounds. Score is the one substantive correction (fitting-split NLL 1.007 -> 0.970);
+the near-1 choice/noul values confirm the trained-in calibration held through
+quantization. Calibrated dev battery (n=1,128): accuracy 86.6% unchanged, NLL
+0.3275 vs 0.3266 raw, ECE 0.0192 vs 0.0180 raw — flat within noise — and
+confident errors at t>=0.95 improved 1.46% -> 1.19%. The dev score slice moved
+slightly against the fit (ECE 0.060 -> 0.069 at n=226), the familiar in-family
+transfer wobble, recorded in decision 28. The official TypeScript SDK smoke test
+passed against the q8 server launched with the fitted file, and `/v1/models`
+reports the temperature sha256 (0115533118f2...) in its identity. Reports:
+`data/runs/quant-v1/{q8-calibration,q8-dev-calibrated}/`, artifact
+`data/runs/quant-v1/temperature-q8.json`.
 
