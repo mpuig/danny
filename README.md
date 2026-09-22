@@ -1,10 +1,27 @@
-# jev — a local System One model and runtime
+# danny — a local System One model and runtime
 
-An open project inspired by [TypeSafe's Jev](https://docs.typesafe.ai/introduction).
+> System 1 is "a machine for jumping to conclusions." — Daniel Kahneman.
+> danny is that machine, taught to jump carefully.
+
+An open learning project inspired by [TypeSafe's Jev](https://docs.typesafe.ai/introduction).
 The goal is a **small fine-tuned model**, built on an existing backbone such as
-SmolLM or Qwen, with task-specific architectural changes and efficient local
+SmolLM, Qwen, or MiniCPM, with task-specific changes and efficient local
 inference. **Apple MLX is the primary training and serving backend**; a Rust
 runtime is an option if profiling justifies it.
+
+## Why "danny"
+
+Jev takes its name from the [Jevons paradox](https://en.wikipedia.org/wiki/Jevons_paradox):
+make a resource cheap enough and consumption explodes. Jev's product category is
+the "System One" model — Daniel Kahneman's name, from
+[*Thinking, Fast and Slow*](https://en.wikipedia.org/wiki/Thinking,_Fast_and_Slow),
+for the fast, automatic, intuitive judgment system. Colleagues called Kahneman
+**Danny**. This project is a System 1 built in the open — fine-tuned from open
+models, calibrated on purpose, honest about what it knows — so it borrows the
+name of the person who described the faculty it tries to be. The naming also
+follows the clone ecosystem's convention of casual human names (jeff, kev).
+The internal Python package keeps the name `jev` for wire-compatibility clarity:
+the served API is Jev's request/answer shape.
 
 The model should answer narrow, request-defined questions about structured state
 using **Choice / Score / Noul** probabilities, without generating text. Code owns

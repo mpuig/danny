@@ -1,5 +1,11 @@
 # Overview
 
+The project is named **danny**, after Danny Kahneman, whose "System 1" — the fast,
+automatic judgment faculty in *Thinking, Fast and Slow* — is the model class Jev
+commercialized and this project rebuilds in the open (see the README for the full
+naming rationale). The internal Python package remains `jev` because the served
+wire protocol is Jev's request/answer shape.
+
 Reviewed 2026-09-19 against the current code, local data, and the public Jev docs.
 
 Use [Experiments](EXPERIMENTS.md) for current controlled measurements. The 3B tables

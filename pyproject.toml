@@ -1,7 +1,7 @@
 [project]
-name = "jev"
+name = "danny"
 version = "0.1.0"
-description = "Open-source System One model: calibrated typed decisions (choice/score/noul) via logit readout on small LLMs, built on Apple MLX"
+description = "danny — an open-source System One model, named for Danny Kahneman: calibrated typed decisions (choice/score/noul) via logit readout on small fine-tuned LLMs, built on Apple MLX"
 requires-python = ">=3.11"
 dependencies = [
     "mlx-lm>=0.22",
