@@ -47,13 +47,13 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/model-routing.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `domain` | **software_engineering** @ 0.86 | **software_engineering** @ 1.00 |
-| `difficulty` | score **2.49**, top level 3 @ 0.55 | score **2.39**, top level 3 @ 0.55 |
-| `needs_frontier_model` | `0.55` P(yes) | `0.44` P(yes) |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `domain` | software_engineering (0.54) ✓ | software_engineering (0.86) ✓ | software_engineering (0.99) ✓ | software_engineering (1.00) ✓ | software_engineering (1.00) ✓ |
+| `difficulty` | L0 (0.64) ✗ | L3 (0.55) ✓ | L3 (0.64) ✓ | L3 (0.55) ✓ | L3 (0.99) ✓ |
+| `needs_frontier_model` | 0.56 ✓ | 0.55 ✓ | 0.41 ✗ | 0.44 ✗ | 0.87 ✓ |
 
 ## Reading the answers
 

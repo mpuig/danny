@@ -694,3 +694,16 @@ holds — nothing about danny may change in response outside a new decision.
 Recorded expectations: fine-tuning is the largest single step (bare base near
 or below the 0.6B fine-tuned tier); quantization cost remains within noise;
 Jev leads overall.
+
+### Decision 33 second amendment: descoped to the examples only
+
+User-directed before any API call: the reserved-v2 Jev pass is NOT executed —
+the benchmark runs only over the eight examples/ requests (24 questions; this entry first said 27 — a counting error, corrected). The
+deliverable is a correctness table (per example, per system: bare base, 0.6B
+volume tier, fine-tuned full-precision MiniCPM, q8 as served, pinned
+jev-1.13.0) in the README, the examples index, and the project page.
+Correctness is judged against authored intended answers committed as
+examples/expected.json — where a question admits several defensible answers
+the acceptable set is listed, and the write-up must say these are authored
+labels on 27 questions: an illustration, not a benchmark. The unexecuted
+reserved-v2 design above remains registered should it be wanted later.

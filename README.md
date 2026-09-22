@@ -100,7 +100,25 @@ call: `POST /v1/calibrations` (see [docs/SERVING.md](docs/SERVING.md)).
 **Eight ready-to-run use-case examples** — support triage, LLM guardrails,
 model routing, RAG reranking, citation checking, moderation, claims intake,
 lead scoring — live in [`examples/`](examples/), each with the actual output of
-both tiers, including the honest misses.
+five systems — from the bare backbone to pinned Jev itself — including the
+honest misses. The correctness ladder (24 authored questions; an illustration,
+not a benchmark):
+
+| Example | 2B base (no FT) | 0.6B FT | 2B FT | 2B FT q8 (served) | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| [citation-check](examples/citation-check.md) | 0/2 | 0/2 | 2/2 | 2/2 | 1/2 |
+| [claims-intake](examples/claims-intake.md) | 3/4 | 3/4 | 4/4 | 4/4 | 4/4 |
+| [lead-scoring](examples/lead-scoring.md) | 3/3 | 1/3 | 3/3 | 3/3 | 3/3 |
+| [llm-guardrail](examples/llm-guardrail.md) | 2/3 | 2/3 | 2/3 | 2/3 | 3/3 |
+| [model-routing](examples/model-routing.md) | 2/3 | 3/3 | 2/3 | 2/3 | 3/3 |
+| [moderation](examples/moderation.md) | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| [rag-rerank](examples/rag-rerank.md) | 2/2 | 2/2 | 2/2 | 2/2 | 2/2 |
+| [support-triage](examples/support-triage.md) | 3/4 | 3/4 | 4/4 | 4/4 | 4/4 |
+| **Total** | **17/24** | **17/24** | **22/24** | **22/24** | **23/24** |
+
+Fine-tuning buys +5 questions on the same backbone; 8-bit quantization costs
+nothing; Jev leads by one. Details, probabilities, and the misses of every
+system: [`examples/`](examples/README.md).
 
 **Not affiliated with or endorsed by TypeSafe.** "Jev-compatible" describes the
 request/answer shape (the official TypeScript SDK runs against this server

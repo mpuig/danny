@@ -48,13 +48,13 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/lead-scoring.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `icp_fit` | score **1.25**, top level 0 @ 0.36 | score **2.00**, top level 3 @ 0.38 |
-| `buying_intent` | `0.70` P(yes) | `0.87` P(yes) |
-| `next_step` | **nurture** @ 0.38 | **route_to_sales** @ 0.43 |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `icp_fit` | L2 (0.33) ✓ | L0 (0.36) ✗ | L3 (0.46) ✓ | L3 (0.38) ✓ | L3 (0.89) ✓ |
+| `buying_intent` | 0.71 ✓ | 0.70 ✓ | 0.87 ✓ | 0.87 ✓ | 0.96 ✓ |
+| `next_step` | route_to_sales (0.47) ✓ | nurture (0.38) ✗ | route_to_sales (0.45) ✓ | route_to_sales (0.43) ✓ | route_to_sales (1.00) ✓ |
 
 ## Reading the answers
 

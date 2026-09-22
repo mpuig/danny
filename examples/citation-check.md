@@ -38,12 +38,12 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/citation-check.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `supported` | `0.79` P(yes) | `0.44` P(yes) |
-| `support_quality` | score **2.64**, top level 3 @ 0.69 | score **2.18**, top level 2 @ 0.62 |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `supported` | 0.59 ✗ | 0.79 ✗ | 0.44 ✓ | 0.44 ✓ | 0.57 ✗ |
+| `support_quality` | L0 (0.32) ✗ | L3 (0.69) ✗ | L2 (0.70) ✓ | L2 (0.62) ✓ | L2 (0.97) ✓ |
 
 ## Reading the answers
 

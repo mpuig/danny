@@ -52,14 +52,14 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/claims-intake.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `claim_type` | **water_damage** @ 0.78 | **water_damage** @ 0.97 |
-| `missing_information` | `0.58` P(yes) | `0.78` P(yes) |
-| `fraud_indicator` | `0.37` P(yes) | `0.69` P(yes) |
-| `complexity` | score **1.87**, top level 2 @ 0.43 | score **2.27**, top level 3 @ 0.46 |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `claim_type` | water_damage (0.72) ✓ | water_damage (0.78) ✓ | water_damage (0.96) ✓ | water_damage (0.97) ✓ | water_damage (1.00) ✓ |
+| `missing_information` | 0.53 ✓ | 0.58 ✓ | 0.75 ✓ | 0.78 ✓ | 0.95 ✓ |
+| `fraud_indicator` | 0.56 ✓ | 0.37 ✗ | 0.73 ✓ | 0.69 ✓ | 0.86 ✓ |
+| `complexity` | L0 (0.44) ✗ | L2 (0.43) ✓ | L3 (0.51) ✓ | L3 (0.46) ✓ | L2 (0.72) ✓ |
 
 ## Reading the answers
 

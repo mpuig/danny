@@ -1,0 +1,43 @@
+{
+  "_comment": "Authored intended answers for the example requests. noul: true/false; choice: acceptable option keys; score: acceptable top levels. 24 questions, hand-labeled by the author - an illustration of correctness, not a benchmark.",
+  "support-triage": {
+    "issue_area": ["billing"],
+    "refund_requested": true,
+    "churn_risk": true,
+    "urgency": [2]
+  },
+  "llm-guardrail": {
+    "injection_attempt": true,
+    "reply_leaked": false,
+    "reply_quality": [2]
+  },
+  "model-routing": {
+    "domain": ["software_engineering"],
+    "difficulty": [2, 3],
+    "needs_frontier_model": true
+  },
+  "rag-rerank": {
+    "relevance": [3],
+    "self_contained": true
+  },
+  "citation-check": {
+    "supported": false,
+    "support_quality": [2]
+  },
+  "moderation": {
+    "violation": ["unsafe_advice", "prohibited_goods", "spam_or_solicitation"],
+    "severity": [2, 3],
+    "review_needed": true
+  },
+  "claims-intake": {
+    "claim_type": ["water_damage"],
+    "missing_information": true,
+    "fraud_indicator": true,
+    "complexity": [2, 3]
+  },
+  "lead-scoring": {
+    "icp_fit": [2, 3],
+    "buying_intent": true,
+    "next_step": ["route_to_sales"]
+  }
+}

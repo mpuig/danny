@@ -52,14 +52,14 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/support-triage.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `issue_area` | **billing** @ 0.82 | **billing** @ 0.93 |
-| `refund_requested` | `0.45` P(yes) | `0.67` P(yes) |
-| `churn_risk` | `0.82` P(yes) | `0.91` P(yes) |
-| `urgency` | score **1.73**, top level 2 @ 0.76 | score **1.78**, top level 2 @ 0.81 |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `issue_area` | billing (0.50) ✓ | billing (0.82) ✓ | billing (0.93) ✓ | billing (0.93) ✓ | billing (1.00) ✓ |
+| `refund_requested` | 0.50 ✓ | 0.45 ✗ | 0.68 ✓ | 0.67 ✓ | 0.90 ✓ |
+| `churn_risk` | 0.62 ✓ | 0.82 ✓ | 0.92 ✓ | 0.91 ✓ | 0.98 ✓ |
+| `urgency` | L0 (0.39) ✗ | L2 (0.76) ✓ | L2 (0.90) ✓ | L2 (0.81) ✓ | L2 (1.00) ✓ |
 
 ## Reading the answers
 

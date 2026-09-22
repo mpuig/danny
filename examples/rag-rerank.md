@@ -38,12 +38,12 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/rag-rerank.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `relevance` | score **2.86**, top level 3 @ 0.89 | score **2.77**, top level 3 @ 0.84 |
-| `self_contained` | `0.79` P(yes) | `0.69` P(yes) |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `relevance` | L3 (0.51) ✓ | L3 (0.89) ✓ | L3 (0.93) ✓ | L3 (0.84) ✓ | L3 (1.00) ✓ |
+| `self_contained` | 0.56 ✓ | 0.79 ✓ | 0.68 ✓ | 0.69 ✓ | 0.84 ✓ |
 
 ## Reading the answers
 

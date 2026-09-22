@@ -49,13 +49,13 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
   -H "Content-Type: application/json" --data @examples/moderation.json
 ```
 
-## Actual output (v0.1.0, temperature-scaled)
+## Actual output (v0.1.0; ✓/✗ against [authored intended answers](./expected.json))
 
-| Question | Volume tier (0.6B) | Quality tier (2.5B q8) |
-|---|---|---|
-| `violation` | **unsafe_advice** @ 0.54 | **unsafe_advice** @ 0.28 |
-| `severity` | score **2.62**, top level 3 @ 0.71 | score **2.29**, top level 3 @ 0.55 |
-| `review_needed` | `0.55` P(yes) | `0.76` P(yes) |
+| Question | 2B base | 0.6B FT | 2B FT | 2B FT q8 | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| `violation` | unsafe_advice (0.46) ✓ | unsafe_advice (0.54) ✓ | unsafe_advice (0.30) ✓ | unsafe_advice (0.28) ✓ | prohibited_goods (0.51) ✓ |
+| `severity` | L2 (0.31) ✓ | L3 (0.71) ✓ | L3 (0.65) ✓ | L3 (0.55) ✓ | L3 (0.99) ✓ |
+| `review_needed` | 0.47 ✗ | 0.55 ✓ | 0.78 ✓ | 0.76 ✓ | 0.93 ✓ |
 
 ## Reading the answers
 

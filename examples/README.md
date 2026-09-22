@@ -17,6 +17,32 @@ the answers *including the misses*, and how code should act on them.
 | [Insurance claims intake](./claims-intake.md) | classification · detection · scoring | `claims-intake.json` |
 | [Lead scoring](./lead-scoring.md) | scoring · detection · routing | `lead-scoring.json` |
 
+
+## Correctness across five systems
+
+Scored with [`scripts/score_examples.py`](../scripts/score_examples.py) against
+[authored intended answers](./expected.json) (noul thresholded at 0.5; choice and
+score by top answer within the acceptable set). Committed raw outputs:
+[`outputs/`](./outputs/). **24 hand-labeled questions — an illustration, not a
+benchmark.**
+
+| Example | 2B base (no FT) | 0.6B FT | 2B FT | 2B FT q8 (served) | Jev 1.13.0 |
+|---|---|---|---|---|---|
+| [citation-check](./citation-check.md) | 0/2 | 0/2 | 2/2 | 2/2 | 1/2 |
+| [claims-intake](./claims-intake.md) | 3/4 | 3/4 | 4/4 | 4/4 | 4/4 |
+| [lead-scoring](./lead-scoring.md) | 3/3 | 1/3 | 3/3 | 3/3 | 3/3 |
+| [llm-guardrail](./llm-guardrail.md) | 2/3 | 2/3 | 2/3 | 2/3 | 3/3 |
+| [model-routing](./model-routing.md) | 2/3 | 3/3 | 2/3 | 2/3 | 3/3 |
+| [moderation](./moderation.md) | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| [rag-rerank](./rag-rerank.md) | 2/2 | 2/2 | 2/2 | 2/2 | 2/2 |
+| [support-triage](./support-triage.md) | 3/4 | 3/4 | 4/4 | 4/4 | 4/4 |
+| **Total** | **17/24** | **17/24** | **22/24** | **22/24** | **23/24** |
+
+The ladder reads left to right: fine-tuning is worth +5 questions on the same
+2B backbone, 8-bit quantization costs nothing, and pinned Jev leads by one —
+it is the only system that catches the prompt injection, while the fine-tuned
+tiers are the only ones that catch the citation overreach Jev waves through.
+
 ## Run any of them
 
 ```bash
