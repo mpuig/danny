@@ -643,3 +643,39 @@ decimals — the serving path is numerically the experiment pipeline. The demo
 fit was registered in a live process only and is not served or persisted
 (decision 31's scope guard). Remaining companion feature: out-of-family
 abstention for structural_warning workloads.
+
+## 33. Descriptive quality benchmark: pinned Jev on the reserved-v2 gold test — pre-registered
+
+Status: **design registered 2026-09-22 before any API call.**
+
+Question: how do danny's two tiers compare to the real, pinned jev-1.13.0 on
+identical gold data — on answer QUALITY only? User-directed scope: latency is
+out of scope (a local model and a hosted API are not comparable on response
+time and the write-up must not headline timing; wall-clock may be recorded as
+environment description only).
+
+Scope guard: this is descriptive. Reserved-v2 remains spent for danny model
+selection; evaluating a third, external system on it selects nothing and tunes
+nothing. No danny configuration, recipe, or serving change may respond to these
+results except through a new pre-registered decision. The teacher must report
+jev-1.13.0 exactly; alias or version drift aborts collection.
+
+Design:
+
+1. Run pinned jev-1.13.0 over all 1,048 reserved-v2 questions
+   (scripts/benchmark_jev_gold.py: resumable by example id, parallel workers,
+   canonical answer conversion via the score_scenarios teacher_target mapping).
+2. Metrics on gold targets, identical to §14's battery: accuracy, ECE, NLL,
+   Brier, confident-error/coverage at t>=0.9 and 0.95, per primitive and per
+   source. Paired grouped-bootstrap deltas vs both tiers' existing reserved-v2
+   predictions (same data_sha256).
+3. Agreement (descriptive): per-tier argmax agreement with Jev.
+4. Also run the eight examples/ requests through jev-1.13.0 and add a Jev
+   column to the example pages — including wherever Jev is wrong or hedged.
+
+Recorded expectations: Jev wins absolute accuracy by a wide margin (point
+prediction: 10-18 points over the quality tier). The pre-declared open
+question, with no prediction either way: does Jev's own confident-error rate
+at t>=0.9 degrade out-of-family the way both danny tiers' did (14-19%)? Either
+answer is publishable: degradation reframes §14 as a property of the model
+class; robustness quantifies what frontier scale buys.
