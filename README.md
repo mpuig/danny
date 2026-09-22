@@ -35,8 +35,8 @@ Requires **Apple Silicon** (MLX) and [uv](https://docs.astral.sh/uv/).
 git clone https://github.com/mpuig/danny && cd danny
 uv sync
 
-# volume tier (0.6B): fetch the adapter + its temperature file from the
-# HuggingFace release, then:
+# volume tier (0.6B). The adapter and temperature file ship in this repo;
+# the Qwen base model (~1.2 GB) downloads from HuggingFace on first run.
 uv run python scripts/serve.py --model Qwen/Qwen3-0.6B \
   --adapter adapters/qwen3-0.6b-structured-v1-synthfiltered-rps \
   --temperature release/temperature-qwen3-0.6b.json --port 8399
@@ -53,11 +53,30 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
                     "criteria": ["Calm.", "Annoyed.", "Angry."]}}}'
 ```
 
-The quality tier (MiniCPM5-2B fused to 8-bit, +6.8 accuracy points on the fresh
-reserved test) is on HuggingFace with its own temperature file; see
-`release/MODEL_CARD_minicpm5-2b-q8.md`. Per-workload calibration — fitting
-temperatures to *your* traffic from ~100 labeled decisions — is one call:
-`POST /v1/calibrations` (see [docs/SERVING.md](docs/SERVING.md)).
+Every question gets a typed answer with probabilities — nothing is generated
+or parsed:
+
+```json
+{"model": "Qwen/Qwen3-0.6B@…",
+ "answers": {
+   "refund":      {"noul": 0.93},
+   "route":       {"choice": "billing", "probabilities": {"billing": 0.91, "support": 0.09}, "confidence": 0.82},
+   "frustration": {"score": 1.7, "probabilities": {"0": 0.05, "1": 0.21, "2": 0.74}, "…": "…"}},
+ "usage": {"input_tokens": 385, "output_tokens": 0}}
+```
+
+The **quality tier** (MiniCPM5-2B fused to 8-bit — +6.8 accuracy points over the
+0.6B on the fresh reserved test, CI [+4.5, +9.2]) is a 2.5 GB download:
+
+```bash
+hf download mpuig/danny-minicpm5-2b-q8 --local-dir models/danny-minicpm5-2b-q8
+uv run python scripts/serve.py --model models/danny-minicpm5-2b-q8 \
+  --temperature release/temperature-minicpm5-2b-q8.json --port 8399
+```
+
+Details in `release/MODEL_CARD_minicpm5-2b-q8.md`. Per-workload calibration —
+fitting temperatures to *your* traffic from ~100 labeled decisions — is one
+call: `POST /v1/calibrations` (see [docs/SERVING.md](docs/SERVING.md)).
 
 **Not affiliated with or endorsed by TypeSafe.** "Jev-compatible" describes the
 request/answer shape (the official TypeScript SDK runs against this server
@@ -87,10 +106,10 @@ matched experiments, fitted temperatures, and a bounded local HTTP service.
 See [Architecture](docs/ARCHITECTURE.md) for current behavior and compatibility gaps,
 and [Roadmap](docs/ROADMAP.md) for the model and serving plan.
 
-## Quickstart: current MLX prototype
+## Explore the research prototype
 
-Requires an Apple Silicon environment supported by MLX. Models download from
-Hugging Face on first use.
+Beyond the served tiers, the repo is a full experimental workbench. Everything
+below also requires Apple Silicon; models download from Hugging Face on first use.
 
 ```bash
 uv sync
@@ -112,10 +131,11 @@ cd tests/ts && npm install && node test.ts
 ```
 
 Add `--adapter adapters/smollm3-3b` to the 3B evaluation/server commands only after
-training or obtaining that matching adapter. Weights and datasets are not bundled
-in git. See [Training](docs/TRAINING.md). For the trained SmolLM and selected Qwen
-adapters, fish-compatible commands, side-by-side servers, and request/output examples,
-use [Serving](docs/SERVING.md).
+training or obtaining that matching adapter. Datasets and full-weight models are
+not bundled in git; the selected LoRA adapters (both tiers plus experiment
+controls) are. See [Training](docs/TRAINING.md). For launch commands for every
+local adapter, side-by-side servers, and request/output examples, use
+[Serving](docs/SERVING.md).
 
 ## Start a structured-v1 experiment
 
@@ -138,12 +158,20 @@ cross-source leakage checks. See [Training](docs/TRAINING.md) for the v1 LoRA co
 
 ## Evidence so far
 
-On the same 1,128-question development set, structured-v1 SmolLM2-135M reached
-**67.0% accuracy**; Qwen3-0.6B at LR 1e-5 reached **81.3%** (NLL **0.460**, or
-**0.448** with calibration-partition temperature fitting). Qwen scored **76.2%** on
-42 synthetic rubric cases, but those labels need independent review. Candidate
-wide-Choice predictions were near chance; calibration did not reliably transfer to
-new rubrics. See [Experiments](docs/EXPERIMENTS.md) for controls and limitations.
+The headline numbers, each from a reserved test the model never influenced and
+spent exactly once: the frozen **0.6B volume tier reached 77.6% / ECE 0.049**
+on the untouched in-family test (development: 82.0% / 0.020 — dev numbers steer
+experiments and are optimistic by construction); the **MiniCPM-q8 quality tier
+beat it by +6.8 accuracy points, CI [+4.5, +9.2]**, on a fresh out-of-family
+gold test, with better NLL and Brier. Quantization to 8-bit was quality-free
+(zero argmax flips, median 1.61x serving speedup). The most important negative
+result is also measured: **in-family calibration does not survive distribution
+shift** (confident errors 14-19% at t>=0.9 out-of-family vs ~2% in-family) —
+which is why the runtime ships per-workload temperature fitting, whose
+resampled evaluation cut that to 3-4%. An earlier 42-case rubric benchmark was
+**retired after retraction** — it swung on seed alone. Full protocols,
+confidence intervals, and every retraction: [Experiments](docs/EXPERIMENTS.md)
+and [Decisions](docs/DECISIONS.md).
 
 Historical 3B experiments report SST-2 accuracy of **0.925** with gold-label LoRA
 and contextual correction (n=200). SST-2 shares its question and criteria with
@@ -171,6 +199,8 @@ or overlapping legacy artifacts. See [Data](docs/DATA.md).
 - [Decisions](docs/DECISIONS.md) — experiment history and revised decisions
 
 `TYPESAFE_API_KEY` is needed only for live Jev calls: distillation, uncached
-agreement evaluation, and SDK tests with `--with-jev`. `.env`, `data/`, and
-`adapters/` are gitignored. Check upstream data/model licenses and TypeSafe's terms
-before distributing data or distilled weights.
+agreement evaluation, and SDK tests with `--with-jev`. `.env`, datasets under
+`data/`, and full-weight models are gitignored; the selected LoRA adapters,
+corpus manifests, and release temperature artifacts are tracked. Check upstream
+data/model licenses and TypeSafe's terms before distributing data or distilled
+weights.
