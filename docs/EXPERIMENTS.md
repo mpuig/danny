@@ -493,3 +493,48 @@ raw -> 0.080; 0.6B 0.088 -> 0.076) and worsened some slices. This quantifies
 the ledger's open shift-robustness item on gold data with confidence intervals:
 per-workload calibration or out-of-family abstention is a deployment
 prerequisite, not an enhancement. Reports: data/runs/reserved-v2/.
+
+## 15. Per-workload temperature fitting (2026-09-22): analysis-only, split verdict
+
+Decision 31's design, run exactly as registered on the spent reserved-v2
+partition's raw predictions (both tiers; no model loaded, selected, or changed).
+For each workload and k in {25, 50, 100}: 50 seeded resamples draw k fit rows,
+fit a scalar temperature, and score the workload's remainder under four arms.
+Script: scripts/workload_calibration_experiment.py; report:
+data/runs/workload-calibration-v1/.
+
+**Headline (k=100, held-out NLL, per-workload vs the in-family serving
+temperatures; intervals over resamples):**
+
+| Workload | Fitted T (q8) | q8 NLL delta | 0.6B NLL delta |
+|---|---:|---:|---:|
+| yahoo_topics | 1.76 | **-0.287 [-0.314, -0.228]** | **-0.177 [-0.195, -0.123]** |
+| sms_spam | **0.32** | **-0.117 [-0.136, -0.056]** | **-0.053 [-0.073, -0.024]** |
+| cola | 1.18 | +0.005 (CI spans 0) | -0.012 (CI spans 0) |
+| app_reviews | 1.51 | +0.005 (CI spans 0) | -0.020 (CI spans 0) |
+
+The pre-declared criterion (>= 3 of 4 workloads per model) was **not met — 2 of
+4 for both models** — and the 2/2 split is the substantive result:
+
+- Where miscalibration is scalar, 100 labels fix it decisively, in **both
+  directions**: yahoo is overconfident (ECE 0.207 -> 0.065 scaled), sms_spam is
+  *under*confident (T ~ 0.32; ECE 0.141 -> 0.032) and the fit RAISED coverage at
+  t>=0.9 from 0.36 to 0.90 at 0.9% errors — recovering automation the in-family
+  temperatures were throwing away. The pooled-OOD arm shows why the feature must
+  be per-workload: pooling the opposite-direction workloads made sms worse than
+  raw (NLL 0.275 vs 0.087 per-workload).
+- Where the failure is not scalar (cola, app_reviews), the fit neither helps nor
+  harms: rank and shape errors are invisible to a temperature.
+- **Aggregate operating point at t>=0.9 (k=100, size-weighted):** q8
+  errors-among-automated 15.6% -> 4.3% at coverage 0.47 -> 0.25; 0.6B
+  19.1% -> 3.5% at 0.30 -> 0.13. The §14 headline failure drops to single
+  digits from 100 labels per workload.
+- Label efficiency: yahoo's full benefit is present at k=50 (-0.285); sms needs
+  k=100 before its interval excludes zero. k=25 fits are usable but noisy
+  (temperature intervals roughly double).
+
+Diagnostic for the serving feature: the fitted temperature itself classifies
+the workload. |log T| large -> scalar fix applies and the fit is worth serving;
+T near 1 with high residual ECE -> the miscalibration is structural, and the
+honest response is a warning and a wider escalation band, not a temperature.
+These demonstration fits are never served (decision 31's scope guard).

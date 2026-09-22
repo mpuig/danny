@@ -577,3 +577,36 @@ Design (analysis-only, scripts/workload_calibration_experiment.py):
    substantially reduced coverage. A scalar temperature cannot fix rank
    errors — accuracy is unchanged by construction; this trades coverage for
    honesty, which is the correct trade for an operator.
+
+### Decision 31 outcome (2026-09-22): criterion not met; the split verdict is the finding
+
+The pre-declared success criterion — per-workload beats the in-family serving
+temperatures on held-out NLL with intervals excluding zero on >= 3 of 4
+workloads per model at k=100 — was **not met: 2 of 4 for both models.** Reported
+as declared. What the 2/2 split actually shows (full numbers: experiments §15):
+
+- **Where miscalibration is scalar, the fix is decisive — in both directions.**
+  yahoo_topics is overconfident (fitted T ~ 1.76): NLL -0.287 [-0.314, -0.228]
+  (q8), ECE 0.207 -> 0.065. sms_spam is UNDERconfident (fitted T ~ 0.32): NLL
+  -0.117, ECE 0.141 -> 0.032, and coverage at t>=0.9 rose 0.36 -> 0.90 at 0.9%
+  errors — the fit recovered automation the in-family temperatures were wasting.
+  No single global temperature can serve both workloads; the pooled-OOD arm
+  proves it (sms NLL 0.275 pooled vs 0.087 per-workload).
+- **Where the failure is not scalar (cola, app_reviews), the fit is a no-op**:
+  deltas within noise of zero, no harm done. A scalar temperature cannot repair
+  rank or shape errors; those workloads need abstention or richer methods.
+- **Aggregate operating point at t>=0.9, k=100**: q8 errors-among-automated
+  15.6% -> 4.3% (coverage 0.47 -> 0.25); 0.6B 19.1% -> 3.5% (0.30 -> 0.13).
+  Single-digit confident errors from 100 labels per workload.
+- Pre-registered expectations scored: largest temperature on yahoo — correct;
+  most benefit at k=50 — true for yahoo, but sms needed k=100 to clear
+  significance; "reduced coverage" — true in aggregate, but sms moved coverage
+  UP, a direction the registration did not anticipate.
+
+Consequence: build the serving feature — a per-workload temperature fit bound
+to workload identity the way temperatures are bound to weights — with the fit
+itself as the diagnostic: a fitted T far from 1 means the scalar fix applies;
+T near 1 with high residual ECE means the workload's failure is not scalar and
+the correct output is a warning plus wider escalation, not a temperature.
+Demonstration fits from this experiment are never served. Report:
+data/runs/workload-calibration-v1/report.json.
