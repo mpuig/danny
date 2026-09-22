@@ -7,14 +7,15 @@ license = {file = "LICENSE"}
 authors = [{name = "Marc Puig", email = "marc.puig@gmail.com"}]
 requires-python = ">=3.11"
 
-[project.urls]
-Repository = "https://github.com/mpuig/danny"
 dependencies = [
     "mlx-lm>=0.22",
     "datasets>=3.0",
     "numpy>=1.26",
     "tqdm>=4.66",
 ]
+
+[project.urls]
+Repository = "https://github.com/mpuig/danny"
 
 [build-system]
 requires = ["hatchling"]
