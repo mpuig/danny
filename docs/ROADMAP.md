@@ -34,15 +34,17 @@ stable default; shared execution is opt-in. FP32 shared tests reduced drift belo
 0.00001 on the measured fixtures. See [Experiments](EXPERIMENTS.md). Production
 serving acceptance still requires broader quality and load tests.
 
-**Current decision point: serving tiers.** The MiniCPM scale-up won selection
-(experiments §11), its patch pass was a clean null (§12), quantization is
-measured (§13), and the decision-27 gate is closed: q8 with its own fitted
-temperatures is the recommended quality-tier serving configuration (decision 28).
-What remains for the tier decision proper: a fresh reserved split for MiniCPM
-(no unbiased test exists for the 2B — the old partition was spent on the 0.6B),
-and a documented latency/quality/footprint policy per tier — e.g., Qwen 0.6B BF16
-for the volume tier, MiniCPM q8 for the quality tier — rather than a single
-recommended adapter.
+**Current decision point: serving tiers — gate run, not confirmed.** The fresh
+reserved test (decision 29, experiments §14) is spent: q8 beat the frozen 0.6B
+by +6.8 accuracy points with the CI excluding zero and better NLL/Brier, but its
+scaled ECE landed at 0.0803 against the pre-declared <= 0.08, so the
+pre-registered confirmation did not trigger. Adopting the tier lineup now is a
+judgment call requiring a new decision entry that cites the near-miss honestly.
+The evidence argues the real blocker is not q8-specific: out-of-family
+confident-error rates were 14-19% at t>=0.9 for BOTH models versus ~2%
+in-family, so shift-robust calibration (per-workload fitting or out-of-family
+abstention) is the deployment prerequisite the tier lineup would inherit either
+way.
 
 ## Destination
 
