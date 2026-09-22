@@ -532,3 +532,48 @@ until it lands, deployment guidance must state that confidence thresholds are
 in-family only; (2) reserved-v2 remains spent — nothing may be tuned against it
 and no further looks exist; (3) any future recipe or backbone change re-enters
 through a new decision entry with a new reserved split.
+
+## 31. Per-workload calibration experiment — pre-registered
+
+Status: **design registered 2026-09-22 before any analysis ran.**
+
+Question: does fitting a scalar temperature on a small labeled sample of a
+workload's own traffic repair the measured out-of-family calibration failure
+(experiments §14: confident errors 14-19% at t>=0.9), and how few labels
+suffice? This is the evidence gate for building per-workload calibration into
+serving.
+
+Scope guard: the analysis reuses the spent reserved-v2 partition's existing raw
+predictions (q8-raw, qwen-raw). No model is selected, trained, or changed; no
+new model looks occur; the procedure is evaluated with internal fit/holdout
+splits inside each workload. Temperatures fitted here are demonstrations and
+are never served — the production feature would fit on a deployment's own
+labeled traffic. Reserved-v2 remains spent for model selection.
+
+Design (analysis-only, scripts/workload_calibration_experiment.py):
+
+1. Workloads = the four reserved-v2 sources (yahoo_topics choice 464, cola
+   noul 212, sms_spam noul 212, app_reviews score 160). Models = both adopted
+   tiers' raw predictions.
+2. For each (model, workload, k) with k in {25, 50, 100}: 50 seeded resamples;
+   each draws k fit rows without replacement, fits a scalar temperature by
+   held-out NLL (jev.calibration.fit_temperature), and evaluates on that
+   workload's remaining rows.
+3. Arms on the same eval remainder: raw; the in-family serving temperatures
+   (per primitive); pooled-OOD (one temperature fitted on the union of the four
+   fit samples of the same resample); per-workload.
+4. Metrics: NLL (primary), ECE, Brier, and the operating points at t>=0.9 and
+   t>=0.95 — coverage AND error-rate-among-automated together, never one
+   without the other. Means over resamples with 2.5/97.5 percentile intervals;
+   paired per-resample deltas.
+5. Success, pre-declared: at k=100, per-workload beats the in-family
+   temperatures on held-out NLL with the 95% resample interval of the mean
+   paired delta excluding zero on at least 3 of 4 workloads for each model.
+   Secondary, reported descriptively: aggregate confident-error rate at t>=0.9
+   and the coverage it costs.
+6. Expectations, recorded in advance: yahoo_topics needs the largest
+   temperature; most of the k=100 benefit is already present at k=50;
+   post-fit confident errors approach single digits at t>=0.9 with
+   substantially reduced coverage. A scalar temperature cannot fix rank
+   errors — accuracy is unchanged by construction; this trades coverage for
+   honesty, which is the correct trade for an operator.
