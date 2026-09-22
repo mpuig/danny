@@ -34,17 +34,15 @@ stable default; shared execution is opt-in. FP32 shared tests reduced drift belo
 0.00001 on the measured fixtures. See [Experiments](EXPERIMENTS.md). Production
 serving acceptance still requires broader quality and load tests.
 
-**Current decision point: serving tiers — gate run, not confirmed.** The fresh
-reserved test (decision 29, experiments §14) is spent: q8 beat the frozen 0.6B
-by +6.8 accuracy points with the CI excluding zero and better NLL/Brier, but its
-scaled ECE landed at 0.0803 against the pre-declared <= 0.08, so the
-pre-registered confirmation did not trigger. Adopting the tier lineup now is a
-judgment call requiring a new decision entry that cites the near-miss honestly.
-The evidence argues the real blocker is not q8-specific: out-of-family
-confident-error rates were 14-19% at t>=0.9 for BOTH models versus ~2%
-in-family, so shift-robust calibration (per-workload fitting or out-of-family
-abstention) is the deployment prerequisite the tier lineup would inherit either
-way.
+**Serving tiers: adopted by judgment (decision 30).** Quality tier = MiniCPM q8
+with its fitted temperatures; volume tier = the frozen 0.6B (decision 25). The
+decision-29 gate did not confirm the adoption — q8 won accuracy +6.8 [+4.5, +9.2]
+but missed the pre-declared ECE bar by 0.0003 — and decision 30 records that
+near-miss rather than claiming confirmation. **Top build item now: shift-robust
+calibration.** Out-of-family confident-error rates were 14-19% at t>=0.9 for both
+tiers versus ~2% in-family; until per-workload calibration or out-of-family
+abstention exists, confidence thresholds are valid in-family only, and deployment
+guidance must say so.
 
 ## Destination
 
