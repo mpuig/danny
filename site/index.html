@@ -485,8 +485,9 @@
 </section>
 
 <section>
-  <p class="eyebrow">Roadmap</p>
+  <p class="eyebrow">Roadmap · as of September 2026</p>
   <h2>What's next</h2>
+  <div class="prose"><p class="caveat" style="margin-top:-6px">Snapshot at v0.1.0 — the living roadmap is <a href="https://github.com/mpuig/danny/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a> in the repo.</p></div>
   <ul class="next">
     <li><span class="k">per-workload calibration</span><span><strong>Built.</strong> <code>POST /v1/calibrations</code> fits a workload's temperatures from ~100 labeled decisions through the exact serving path; requests opt in per call, unknown workloads fail closed, and the artifact is identity-bound and reloadable at startup like every calibration in this project. Each fit ships its own verdict — apply, neutral, structural warning, or degenerate — so the endpoint tells you when a temperature is the wrong tool. Verified end-to-end on the q8 tier: the served fit matches the experiment pipeline to four decimals.<span class="why">The measured 16–19% → 3–4% confident-error repair, one HTTP call away from any deployment.</span></span></li>
     <li><span class="k">abstention</span><span>For the workloads the scalar fix can't touch (two of four in the experiment): an out-of-family signal that widens the escalation band instead of emitting confident probabilities.<span class="why">A temperature can't fix rank errors; refusing to be confident can.</span></span></li>
