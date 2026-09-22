@@ -679,3 +679,18 @@ question, with no prediction either way: does Jev's own confident-error rate
 at t>=0.9 degrade out-of-family the way both danny tiers' did (14-19%)? Either
 answer is publishable: degradation reframes §14 as a property of the model
 class; robustness quantifies what frontier scale buys.
+
+### Decision 33 amendment (pre-registered before any run): the ablation ladder
+
+User-directed: the benchmark compares four quality arms on reserved-v2, not two —
+(1) **bare MiniCPM5-2B-Base**, no adapter (what the backbone knows before any
+fine-tuning); (2) **fine-tuned, full precision** (the BF16 adapter, raw — no
+temperature artifact exists for this arm by design); (3) **q8 as served**
+(quantized + fitted temperatures, the adopted quality tier; its raw run is
+also on disk for an apples-to-apples quantization-cost column); (4) **pinned
+jev-1.13.0**. The 0.6B volume tier's existing predictions are reported
+alongside for completeness. All arms are descriptive: the same scope guard
+holds — nothing about danny may change in response outside a new decision.
+Recorded expectations: fine-tuning is the largest single step (bare base near
+or below the 0.6B fine-tuned tier); quantization cost remains within noise;
+Jev leads overall.
