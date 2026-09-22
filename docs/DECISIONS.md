@@ -428,3 +428,46 @@ split for MiniCPM (no unbiased test exists for this model). Dev-side score
 calibration moved slightly against the fit (ECE 0.060 -> 0.069, Brier +0.005)
 while the fitting split improved — the familiar in-family transfer wobble at
 n=226; recorded, not concerning at this magnitude.
+
+## 29. Reserved-v2: fresh gold test for the MiniCPM tier decision — pre-registered
+
+Status: **partition frozen and committed 2026-09-22 before any model evaluation;
+one look pre-registered below; the partition is spent once that look happens.**
+
+Why: the original reserved test was spent on the 0.6B (entry/experiments §9), so
+no unbiased number exists for the MiniCPM family, and the serving-tier decision
+(roadmap) requires one. kev's local pool offers no unused rows — the converted
+kev test IS the spent partition — so reserved-v2 is cut from four public gold
+sources that appear in no training, evaluation, or selection decision of this
+project: yahoo_answers_topics (choice, 10-way, 464), glue/cola acceptability
+(noul, 212), sms_spam (noul, 212), app_reviews 1-5 stars (score, 160); 1,048
+questions mirroring the spent test's primitive shape. Rotten Tomatoes/SST-family
+and tweet_eval sources were rejected for text overlap with consulted diagnostics.
+Zero content-key collisions against all four synthfiltered-corpus partitions
+(whose test is byte-identical to the spent test). Builder:
+scripts/build_reserved_v2.py, seed 20260922; test.jsonl sha256
+7ee618964eec5f54f4776bf7c184606ec420b220aef8fd5b056c23d88738fc08.
+
+Pre-registered single look (nothing else may touch this partition):
+
+1. Four evaluation runs, canonical renderer/readout, native precision,
+   independent execution: MiniCPM-q8 (models/minicpm5-2b-sfr-q8) raw and with
+   data/runs/quant-v1/temperature-q8.json; frozen 0.6B
+   (Qwen/Qwen3-0.6B + adapters/qwen3-0.6b-structured-v1-synthfiltered-rps)
+   raw and with data/runs/filtered-v2/temperature.json.
+2. Paired grouped-bootstrap comparison (scripts/compare_runs.py) on the scaled
+   runs: accuracy, NLL, Brier deltas.
+3. Pre-declared outcome mapping: MiniCPM-q8 is CONFIRMED as the quality tier if
+   the paired accuracy delta favors it with a CI excluding zero AND its scaled
+   ECE is at most 0.08. Otherwise the tier decision returns to open. No
+   retuning, refitting, or model changes may respond to these numbers; either
+   way the partition is spent.
+4. Expected direction, recorded in advance: MiniCPM-q8 wins accuracy by 3-8
+   points; both models land below their kev-test-family numbers.
+
+Pre-declared caveats: all four sources are out-of-family relative to training
+(a transfer test, harder than the in-family spent test — absolute numbers are
+not comparable to the 0.6B's 77.6%); CoLA grammaticality is a capability
+neither training corpus targeted; app_reviews stars and yahoo topics carry
+ordinary crowd-label noise, which bounds the achievable ceiling. Gold labels
+here measure correctness, not agreement with the Jev teacher.

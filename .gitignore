@@ -7,6 +7,9 @@ data/experiments/synth-rps-corpus/*
 !data/experiments/synthfiltered-corpus/
 data/experiments/synthfiltered-corpus/*
 !data/experiments/synthfiltered-corpus/manifest.json
+!data/experiments/reserved-v2/
+data/experiments/reserved-v2/*
+!data/experiments/reserved-v2/manifest.json
 adapters/*
 !adapters/qwen3-0.6b-structured-v1-rps
 !adapters/qwen3-0.6b-structured-v1-synth

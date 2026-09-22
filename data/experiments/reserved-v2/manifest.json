@@ -1,0 +1,64 @@
+{
+  "format_version": 1,
+  "partition": "reserved test only; one pre-registered look (decision 29), spent afterward",
+  "seed": 20260922,
+  "sources": {
+    "yahoo_topics": {
+      "hf_id": "community-datasets/yahoo_answers_topics",
+      "split": "test",
+      "count": 464,
+      "instructions": "Which topic does the question in the state belong to?",
+      "type": "choice"
+    },
+    "cola": {
+      "hf_id": "nyu-mll/glue",
+      "hf_config": "cola",
+      "split": "validation",
+      "count": 212,
+      "instructions": "Is the sentence in the state grammatically acceptable English?",
+      "type": "noul"
+    },
+    "sms_spam": {
+      "hf_id": "ucirvine/sms_spam",
+      "split": "train",
+      "count": 212,
+      "instructions": "Is the message in the state unsolicited spam?",
+      "type": "noul"
+    },
+    "app_reviews": {
+      "hf_id": "sealuzh/app_reviews",
+      "split": "train",
+      "count": 160,
+      "instructions": "How satisfied is the user in the state's app review?",
+      "type": "score"
+    }
+  },
+  "leakage_reference": {
+    "data/experiments/synthfiltered-corpus/train.jsonl": "76da7ba9e9db982959dbffd3afb5da947fe41093a34822db99e7949407e872dc",
+    "data/experiments/synthfiltered-corpus/development.jsonl": "21ac3970bf56862e40f0e816d399a424c9877db820be2a58c81e2a40345e8ce9",
+    "data/experiments/synthfiltered-corpus/calibration.jsonl": "9cb943edb80814ef929aa763a5c4a45d31e1ec0bd1006dc5cc8dde662913d141",
+    "data/experiments/synthfiltered-corpus/test.jsonl": "f7447ab1d06a0b741adf4b614324ba12644d97cc65e827b4681ad53c772976dd"
+  },
+  "dropped": {
+    "leaked": 0,
+    "duplicate": 1
+  },
+  "files": {
+    "test.jsonl": {
+      "sha256": "7ee618964eec5f54f4776bf7c184606ec420b220aef8fd5b056c23d88738fc08",
+      "examples": 1048,
+      "groups": 1048,
+      "sources": {
+        "reserved-v2:app_reviews": 160,
+        "reserved-v2:cola": 212,
+        "reserved-v2:sms_spam": 212,
+        "reserved-v2:yahoo_topics": 464
+      },
+      "primitives": {
+        "choice": 464,
+        "noul": 424,
+        "score": 160
+      }
+    }
+  }
+}
