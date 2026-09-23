@@ -1,7 +1,7 @@
 # Examples
 
 Request templates for the decision patterns in [Jev's use-case catalog](https://docs.typesafe.ai/),
-adapted to danny's three primitives. Each page shows the full request, a one-line
+adapted to system-one's three primitives. Each page shows the full request, a one-line
 curl, the **actual output of both tiers** (captured at v0.1.0 — reproducible:
 same weights, same temperatures, deterministic readout), an honest reading of
 the answers *including the misses*, and how code should act on them.
@@ -53,7 +53,7 @@ curl -s -X POST http://127.0.0.1:8399/v1/systemone \
 
 ## Read this before trusting a threshold
 
-All eight workloads are **out-of-family** relative to danny's training data.
+All eight workloads are **out-of-family** relative to system-one's training data.
 The project measured what that means: confident-error rates of **14–19% at
 t≥0.9** out-of-family versus ~2% in-family ([EXPERIMENTS §14](../docs/EXPERIMENTS.md)).
 Two of the pages show live consequences — both tiers miss a blatant prompt

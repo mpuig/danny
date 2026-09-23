@@ -4,13 +4,13 @@ base_model: openbmb/MiniCPM5-2B-Base
 tags: [decision-model, calibration, system-one, mlx, quantized]
 ---
 
-# danny-minicpm5-2b-q8 — quality-tier System One model (8-bit)
+# system-one-minicpm5-2b-q8 — quality-tier System One model (8-bit)
 
-**MiniCPM5-2B-Base** (Apache-2.0) fine-tuned with the danny frozen recipe,
+**MiniCPM5-2B-Base** (Apache-2.0) fine-tuned with the system-one frozen recipe,
 LoRA-fused and quantized to 8 bits with MLX (8.501 bits/weight, 2.5 GB). A
 **System One decision model**: typed questions (choice / score / noul) over a
 JSON state, answered with calibrated probabilities from one forward pass — no
-generation. Part of [danny](https://github.com/mpuig/danny), an open learning
+generation. Part of [system-one](https://github.com/mpuig/system-one), an open learning
 project rebuilding the behavior of Typesafe's Jev. **Not affiliated with or
 endorsed by TypeSafe.**
 
@@ -50,10 +50,10 @@ trusting thresholds on a new workload; it repaired scalar miscalibration to
 ## Use
 
 ```bash
-git clone https://github.com/mpuig/danny && cd danny && uv sync
-hf download mpuig/danny-minicpm5-2b-q8 --local-dir danny-minicpm5-2b-q8
-uv run python scripts/serve.py --model danny-minicpm5-2b-q8 \
-  --temperature danny-minicpm5-2b-q8/temperature.json
+git clone https://github.com/mpuig/system-one && cd system-one && uv sync
+hf download mpuig/system-one-minicpm5-2b-q8 --local-dir system-one-minicpm5-2b-q8
+uv run python scripts/serve.py --model system-one-minicpm5-2b-q8 \
+  --temperature system-one-minicpm5-2b-q8/temperature.json
 ```
 
 Light 3-question request: ~195 ms p50 on an M4 Max. Apple Silicon required

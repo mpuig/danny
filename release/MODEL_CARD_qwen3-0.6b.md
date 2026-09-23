@@ -4,13 +4,13 @@ base_model: Qwen/Qwen3-0.6B
 tags: [decision-model, calibration, system-one, mlx, lora]
 ---
 
-# danny-qwen3-0.6b — volume-tier System One adapter
+# system-one-qwen3-0.6b — volume-tier System One adapter
 
 LoRA adapter for **Qwen3-0.6B** (base, Apache-2.0) turning it into a
 **System One decision model**: typed questions (choice / score / noul) over a
 JSON state, answered with calibrated probability distributions read directly
 from restricted logits in one forward pass — no text generation. Part of
-[danny](https://github.com/mpuig/danny), an open learning project rebuilding the
+[system-one](https://github.com/mpuig/system-one), an open learning project rebuilding the
 behavior of Typesafe's Jev. **Not affiliated with or endorsed by TypeSafe.**
 
 ## Files
@@ -46,10 +46,10 @@ miscalibration to 3-4% confident errors in the repo's resampled experiment.
 ## Use
 
 ```bash
-git clone https://github.com/mpuig/danny && cd danny && uv sync
-hf download mpuig/danny-qwen3-0.6b --local-dir danny-qwen3-0.6b
+git clone https://github.com/mpuig/system-one && cd system-one && uv sync
+hf download mpuig/system-one-qwen3-0.6b --local-dir system-one-qwen3-0.6b
 uv run python scripts/serve.py --model Qwen/Qwen3-0.6B \
-  --adapter danny-qwen3-0.6b --temperature danny-qwen3-0.6b/temperature.json
+  --adapter system-one-qwen3-0.6b --temperature system-one-qwen3-0.6b/temperature.json
 ```
 
 (The same adapter and temperature file also ship inside the GitHub repo at

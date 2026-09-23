@@ -1,7 +1,7 @@
-# danny — a local System One model and runtime
+# system-one — an open System One model and runtime
 
 > System 1 is "a machine for jumping to conclusions." — Daniel Kahneman.
-> danny is that machine, taught to jump carefully.
+> system-one is that machine, taught to jump carefully.
 
 An open learning project inspired by [TypeSafe's Jev](https://docs.typesafe.ai/introduction).
 The goal is a **small fine-tuned model**, built on an existing backbone such as
@@ -9,19 +9,18 @@ SmolLM, Qwen, or MiniCPM, with task-specific changes and efficient local
 inference. **Apple MLX is the primary training and serving backend**; a Rust
 runtime is an option if profiling justifies it.
 
-## Why "danny"
+## Why "system-one"
 
 Jev takes its name from the [Jevons paradox](https://en.wikipedia.org/wiki/Jevons_paradox):
-make a resource cheap enough and consumption explodes. Jev's product category is
-the "System One" model — Daniel Kahneman's name, from
+make a resource cheap enough and consumption explodes. Its product category is
+the "System One" model — Daniel Kahneman's term, from
 [*Thinking, Fast and Slow*](https://en.wikipedia.org/wiki/Thinking,_Fast_and_Slow),
-for the fast, automatic, intuitive judgment system. Colleagues called Kahneman
-**Danny**. This project is a System 1 built in the open — fine-tuned from open
-models, calibrated on purpose, honest about what it knows — so it borrows the
-name of the person who described the faculty it tries to be. The naming also
-follows the clone ecosystem's convention of casual human names (jeff, kev).
-The internal Python package keeps the name `jev` for wire-compatibility clarity:
-the served API is Jev's request/answer shape.
+for the fast, automatic, intuitive judgment faculty. This project takes the
+category as its name: a System 1 built in the open — fine-tuned from open
+models, calibrated on purpose, honest about what it knows. (It launched briefly
+as *system-one*, Kahneman's nickname; the category name won.) The internal Python
+package keeps the name `jev` for wire-compatibility clarity: the served API is
+Jev's request/answer shape.
 
 The model should answer narrow, request-defined questions about structured state
 using **Choice / Score / Noul** probabilities, without generating text. Code owns
@@ -32,13 +31,13 @@ workflow logic; the model supplies semantic judgments and useful uncertainty.
 Requires **Apple Silicon** (MLX) and [uv](https://docs.astral.sh/uv/).
 
 **Models on HuggingFace:**
-[mpuig/danny-qwen3-0.6b](https://huggingface.co/mpuig/danny-qwen3-0.6b)
+[mpuig/system-one-qwen3-0.6b](https://huggingface.co/mpuig/system-one-qwen3-0.6b)
 (volume tier — the adapter also ships in this repo) ·
-[mpuig/danny-minicpm5-2b-q8](https://huggingface.co/mpuig/danny-minicpm5-2b-q8)
+[mpuig/system-one-minicpm5-2b-q8](https://huggingface.co/mpuig/system-one-minicpm5-2b-q8)
 (quality tier, 2.5 GB). Each carries its identity-bound `temperature.json`.
 
 ```bash
-git clone https://github.com/mpuig/danny && cd danny
+git clone https://github.com/mpuig/system-one && cd system-one
 uv sync
 
 # volume tier (0.6B). The adapter and temperature file ship in this repo;
@@ -83,13 +82,13 @@ Note the shape of calibrated honesty: decisive where the evidence is explicit
 threshold and act on, not performative certainty. Criteria descriptions matter:
 the same questions with bare one-word options answer far less confidently.
 
-The **[quality tier](https://huggingface.co/mpuig/danny-minicpm5-2b-q8)**
+The **[quality tier](https://huggingface.co/mpuig/system-one-minicpm5-2b-q8)**
 (MiniCPM5-2B fused to 8-bit — +6.8 accuracy points over the 0.6B on the fresh
 reserved test, CI [+4.5, +9.2]) is a 2.5 GB download:
 
 ```bash
-hf download mpuig/danny-minicpm5-2b-q8 --local-dir models/danny-minicpm5-2b-q8
-uv run python scripts/serve.py --model models/danny-minicpm5-2b-q8 \
+hf download mpuig/system-one-minicpm5-2b-q8 --local-dir models/system-one-minicpm5-2b-q8
+uv run python scripts/serve.py --model models/system-one-minicpm5-2b-q8 \
   --temperature release/temperature-minicpm5-2b-q8.json --port 8399
 ```
 

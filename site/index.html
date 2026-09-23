@@ -1,12 +1,12 @@
-<title>danny</title>
+<title>system-one</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="danny — an open-source System One decision model named for Danny Kahneman: calibrated typed decisions on small fine-tuned open models, local on Apple Silicon, Jev-compatible.">
-<link rel="canonical" href="https://mpuig.github.io/danny/">
-<meta property="og:title" content="danny: rebuilding Jev in the open">
+<meta name="description" content="system-one — an open-source System One decision model (Kahneman's term for the fast judgment faculty): calibrated typed decisions on small fine-tuned open models, local on Apple Silicon, Jev-compatible.">
+<link rel="canonical" href="https://mpuig.github.io/system-one/">
+<meta property="og:title" content="system-one: rebuilding Jev in the open">
 <meta property="og:description" content="A machine for jumping to conclusions — carefully. Calibrated System One decisions on small fine-tuned open models, measured one frozen experiment at a time.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://mpuig.github.io/danny/">
+<meta property="og:url" content="https://mpuig.github.io/system-one/">
 <meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
@@ -190,9 +190,9 @@
 <div class="wrap">
 
 <header class="hero">
-  <p class="eyebrow">danny · working notes · ~/code/danny · September 2026</p>
-  <h1>danny: rebuilding Jev in the open</h1>
-  <p class="lede">Kahneman called System 1 "a machine for jumping to conclusions." Typesafe built one — Jev answers typed questions about text with calibrated probabilities instead of generated prose — and published no paper on how it works. <strong>danny</strong> (named for Danny Kahneman, whose System 1 this tries to be) reconstructs that behavior from public evidence on small open models, on a Mac, one measured experiment at a time: a machine for jumping to conclusions, <em>carefully</em>. The end state is a two-tier lineup — a 2.5B quality model quantized to 8-bit and a 0.6B volume model, both frozen, calibrated, and drop-in compatible with the official SDK. This page is the result, the mechanism, and the story — including what broke.</p>
+  <p class="eyebrow">system-one · working notes · ~/code/system-one · September 2026</p>
+  <h1>system-one: rebuilding Jev in the open</h1>
+  <p class="lede">Kahneman called System 1 "a machine for jumping to conclusions." Typesafe built one — Jev answers typed questions about text with calibrated probabilities instead of generated prose — and published no paper on how it works. <strong>system-one</strong> (the name is Kahneman's own term for the faculty it tries to be) reconstructs that behavior from public evidence on small open models, on a Mac, one measured experiment at a time: a machine for jumping to conclusions, <em>carefully</em>. The end state is a two-tier lineup — a 2.5B quality model quantized to 8-bit and a 0.6B volume model, both frozen, calibrated, and drop-in compatible with the official SDK. This page is the result, the mechanism, and the story — including what broke.</p>
 
   <div class="answer-demo">
     <div class="req">
@@ -242,21 +242,21 @@
     <div class="prim"><div class="name">logic stays in code</div><div class="q">Atomic questions, composed by software</div><div class="ret">The model answers narrow, well-scoped questions; the workflow — weights, priorities, side effects, who gets escalated — stays in reviewable code and changes without retraining. Delegate the judgment, never the policy.</div></div>
   </div>
 
-  <div class="prose" style="margin-top:18px"><p>Where this shape of model earns its keep: ticket triage and intent routing, fraud and claims operations, content moderation queues, compliance screening, escalation gates, and — increasingly — as the fast decision layer <em>inside</em> agentic systems, where a large model plans and a System One model adjudicates every small step. Eight of these patterns ship as <a href="https://github.com/mpuig/danny/tree/main/examples">runnable examples in the repo</a> — each with the real output of five systems, from the bare backbone to pinned Jev itself, including the honest misses.</p></div>
+  <div class="prose" style="margin-top:18px"><p>Where this shape of model earns its keep: ticket triage and intent routing, fraud and claims operations, content moderation queues, compliance screening, escalation gates, and — increasingly — as the fast decision layer <em>inside</em> agentic systems, where a large model plans and a System One model adjudicates every small step. Eight of these patterns ship as <a href="https://github.com/mpuig/system-one/tree/main/examples">runnable examples in the repo</a> — each with the real output of five systems, from the bare backbone to pinned Jev itself, including the honest misses.</p></div>
   <div class="panel">
     <h3>Eight examples, five systems</h3>
     <p class="sub">correct answers per example against authored intended answers — 24 questions, an illustration, not a benchmark</p>
     <div class="tablewrap" style="margin-top:6px"><table>
       <thead><tr><th>Example</th><th>2B base<br>(no FT)</th><th>0.6B FT</th><th>2B FT</th><th>2B FT q8<br>(served)</th><th>Jev 1.13.0</th></tr></thead>
       <tbody>
-                <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/citation-check.md">citation-check</a></td><td>0/2</td><td>0/2</td><td>2/2</td><td>2/2</td><td>1/2</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/claims-intake.md">claims-intake</a></td><td>3/4</td><td>3/4</td><td>4/4</td><td>4/4</td><td>4/4</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/lead-scoring.md">lead-scoring</a></td><td>3/3</td><td>1/3</td><td>3/3</td><td>3/3</td><td>3/3</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/llm-guardrail.md">llm-guardrail</a></td><td>2/3</td><td>2/3</td><td>2/3</td><td>2/3</td><td>3/3</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/model-routing.md">model-routing</a></td><td>2/3</td><td>3/3</td><td>2/3</td><td>2/3</td><td>3/3</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/moderation.md">moderation</a></td><td>2/3</td><td>3/3</td><td>3/3</td><td>3/3</td><td>3/3</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/rag-rerank.md">rag-rerank</a></td><td>2/2</td><td>2/2</td><td>2/2</td><td>2/2</td><td>2/2</td></tr>
-        <tr><td><a href="https://github.com/mpuig/danny/blob/main/examples/support-triage.md">support-triage</a></td><td>3/4</td><td>3/4</td><td>4/4</td><td>4/4</td><td>4/4</td></tr>
+                <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/citation-check.md">citation-check</a></td><td>0/2</td><td>0/2</td><td>2/2</td><td>2/2</td><td>1/2</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/claims-intake.md">claims-intake</a></td><td>3/4</td><td>3/4</td><td>4/4</td><td>4/4</td><td>4/4</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/lead-scoring.md">lead-scoring</a></td><td>3/3</td><td>1/3</td><td>3/3</td><td>3/3</td><td>3/3</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/llm-guardrail.md">llm-guardrail</a></td><td>2/3</td><td>2/3</td><td>2/3</td><td>2/3</td><td>3/3</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/model-routing.md">model-routing</a></td><td>2/3</td><td>3/3</td><td>2/3</td><td>2/3</td><td>3/3</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/moderation.md">moderation</a></td><td>2/3</td><td>3/3</td><td>3/3</td><td>3/3</td><td>3/3</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/rag-rerank.md">rag-rerank</a></td><td>2/2</td><td>2/2</td><td>2/2</td><td>2/2</td><td>2/2</td></tr>
+        <tr><td><a href="https://github.com/mpuig/system-one/blob/main/examples/support-triage.md">support-triage</a></td><td>3/4</td><td>3/4</td><td>4/4</td><td>4/4</td><td>4/4</td></tr>
         <tr><td><strong>Total</strong></td><td><strong>17/24</strong></td><td><strong>17/24</strong></td><td><strong>22/24</strong></td><td><strong>22/24</strong></td><td><strong>23/24</strong></td></tr>
       </tbody>
     </table></div>
@@ -498,7 +498,7 @@
       <tr><td>Laya</td><td>421M bidirectional encoder</td><td>yes, RLCD (published)</td><td>partially</td><td>13ms latency; 512-token ceiling</td></tr>
       <tr><td>openjev</td><td>DiffusionGemma 26B-A4B</td><td>no (strong base, zero-shot)</td><td>unknown</td><td>diffusion readout; free hosted tier; images</td></tr>
       <tr><td>SemIf</td><td>Qwen3.5-4B frozen (also 0.6B, MiniCPM)</td><td>no (frozen checkpoints)</td><td>post-hoc, per workload</td><td>4 runtimes incl. browser WebGPU; per-row provenance</td></tr>
-      <tr><td><strong>danny</strong> (this project)</td><td>0.6B + 2.5B logit readout</td><td>yes, frozen protocol</td><td><strong>primary metric, with CIs</strong></td><td>teacher distillation + audited retractions</td></tr>
+      <tr><td><strong>system-one</strong> (this project)</td><td>0.6B + 2.5B logit readout</td><td>yes, frozen protocol</td><td><strong>primary metric, with CIs</strong></td><td>teacher distillation + audited retractions</td></tr>
     </tbody>
   </table></div>
   <p class="caveat">Jev itself (~83% MMLU-Pro per black-box probes, 64k context) implies a far larger backbone — the competition here is on calibration, cost, and self-hosting, not frontier reasoning. SemIf is the closest cousin — same readout, same reproducibility instincts, even the same backbones — with one decisive difference: it never trains. Its frozen 4B needs temperature 2.5 to drag calibration error from 0.21 to 0.07 post-hoc; our fine-tuned models fit temperatures of 1.02–1.16 because calibration is trained in. That gap is this project's whole thesis.</p>
@@ -507,7 +507,7 @@
 <section>
   <p class="eyebrow">Roadmap · as of September 2026</p>
   <h2>What's next</h2>
-  <div class="prose"><p class="caveat" style="margin-top:-6px">Snapshot at v0.1.0 — the living roadmap is <a href="https://github.com/mpuig/danny/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a> in the repo.</p></div>
+  <div class="prose"><p class="caveat" style="margin-top:-6px">Snapshot at v0.1.0 — the living roadmap is <a href="https://github.com/mpuig/system-one/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a> in the repo.</p></div>
   <ul class="next">
     <li><span class="k">per-workload calibration</span><span><strong>Built.</strong> <code>POST /v1/calibrations</code> fits a workload's temperatures from ~100 labeled decisions through the exact serving path; requests opt in per call, unknown workloads fail closed, and the artifact is identity-bound and reloadable at startup like every calibration in this project. Each fit ships its own verdict — apply, neutral, structural warning, or degenerate — so the endpoint tells you when a temperature is the wrong tool. Verified end-to-end on the q8 tier: the served fit matches the experiment pipeline to four decimals.<span class="why">The measured 16–19% → 3–4% confident-error repair, one HTTP call away from any deployment.</span></span></li>
     <li><span class="k">abstention</span><span>For the workloads the scalar fix can't touch (two of four in the experiment): an out-of-family signal that widens the escalation band instead of emitting confident probabilities.<span class="why">A temperature can't fix rank errors; refusing to be confident can.</span></span></li>
@@ -517,8 +517,8 @@
 </section>
 
 <footer>
-  <p><strong>Why "danny":</strong> Jev is named for the Jevons paradox; its product category is the "System One" model, Daniel Kahneman's term from <em>Thinking, Fast and Slow</em> for the fast, automatic judgment faculty. Colleagues called Kahneman Danny — and this project, a System 1 built in the open and calibrated on purpose, borrows the name of the person who described the faculty it tries to be.</p>
-  <p>Code, models, and the full record — the decision log with evidence and retractions, experiment reports with confidence intervals, training and serving guides — live at <a href="https://github.com/mpuig/danny">github.com/mpuig/danny</a> (MIT; weights on HuggingFace). Local numbers are development measurements on Apple Silicon, not compatibility certification. Not affiliated with or endorsed by TypeSafe. Reference points: Typesafe's public docs, the kev / Nimble / Laya open-source projects, and independent black-box probes of Jev.</p>
+  <p><strong>Why "system-one":</strong> Jev is named for the Jevons paradox; its product category is the "System One" model, Daniel Kahneman's term in <em>Thinking, Fast and Slow</em> for the fast, automatic judgment faculty. This project takes the category as its name — a System 1 built in the open, calibrated on purpose. (It launched briefly as <em>system-one</em>, Kahneman's nickname; the category name won.)</p>
+  <p>Code, models, and the full record — the decision log with evidence and retractions, experiment reports with confidence intervals, training and serving guides — live at <a href="https://github.com/mpuig/system-one">github.com/mpuig/system-one</a> (MIT; weights on HuggingFace). Local numbers are development measurements on Apple Silicon, not compatibility certification. Not affiliated with or endorsed by TypeSafe. Reference points: Typesafe's public docs, the kev / Nimble / Laya open-source projects, and independent black-box probes of Jev.</p>
 </footer>
 
 </div>

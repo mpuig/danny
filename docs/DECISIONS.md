@@ -707,3 +707,17 @@ examples/expected.json — where a question admits several defensible answers
 the acceptable set is listed, and the write-up must say these are authored
 labels on 27 questions: an illustration, not a benchmark. The unexecuted
 reserved-v2 design above remains registered should it be wanted later.
+
+## 34. Renamed: system-one (user-directed, 2026-09-23)
+
+The project name is now **system-one** — Kahneman's category term adopted as the
+identity. Considered and rejected: `som-experiment` (SOM collides with
+Self-Organizing Maps; "-experiment" undersells the shipped result) and
+`jev-research` (builds the identity on TypeSafe's mark and reads as
+affiliation; SemIf's rename away from "OpenJev" is the ecosystem precedent).
+The trade accepted knowingly: a category name is clear but never fully owned.
+The prior name *danny* (Kahneman's nickname) lasted one day in public;
+"launched briefly as danny" notes remain in the README, OVERVIEW, and the page
+footer for anyone who saw it. GitHub and HuggingFace renames leave redirects;
+the internal Python package remains `jev` (wire-compatibility clarity).
+Historical decision entries mentioning danny are records and stay unchanged.

@@ -1,7 +1,7 @@
 [project]
-name = "danny"
+name = "system-one"
 version = "0.1.0"
-description = "danny — an open-source System One model, named for Danny Kahneman: calibrated typed decisions (choice/score/noul) via logit readout on small fine-tuned LLMs, built on Apple MLX"
+description = "system-one — an open-source System One model (Kahneman's term for the fast judgment faculty): calibrated typed decisions (choice/score/noul) via logit readout on small fine-tuned LLMs, built on Apple MLX"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Marc Puig", email = "marc.puig@gmail.com"}]
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/mpuig/danny"
+Repository = "https://github.com/mpuig/system-one"
 
 [build-system]
 requires = ["hatchling"]
